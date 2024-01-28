@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-model href="../../Organization/knxprod-support/knx_project_14/knx-editor.xsd" type="application/xml" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<KNX xmlns:op="http://github.com/OpenKNX/OpenKNXproducer" xmlns="http://knx.org/xml/project/14" CreatedBy="KNX MT" ToolVersion="5.1.255.16695">
+  <ManufacturerData>
+    <Manufacturer RefId="M-00FA">
+      <ApplicationPrograms>
+        <ApplicationProgram Id="%AID%" ApplicationNumber="200" ApplicationVersion="1" ProgramType="ApplicationProgram" MaskVersion="MV-07B0" Name="SOM" LoadProcedureStyle="MergedProcedure" PeiType="0" DefaultLanguage="de" DynamicTableManagement="false" Linkable="false" MinEtsVersion="4.0">
+          <Static>
+            <ParameterTypes>
+              <ParameterType Id="%AID%_PT-BTNInputs" Name="BTNInputs">
+                <TypeRestriction Base="Value" SizeInBit="16">
+                  <Enumeration Text="Externes KO" Value="0" Id="%ENID%" />
+                </TypeRestriction>
+              </ParameterType>
+              <ParameterType Id="%AID%_PT-SafetySensor" Name="SafetySensor">
+                <TypeRestriction Base="Value" SizeInBit="2">
+                  <Enumeration Text="Keiner" Value="0" Id="%ENID%" />
+                  <Enumeration Text="Sensor innen" Value="1" Id="%ENID%" />
+                  <Enumeration Text="Sensor außen" Value="2" Id="%ENID%" />
+                  <Enumeration Text="Beide Sensoren" Value="3" Id="%ENID%" />
+                </TypeRestriction>
+              </ParameterType>
+            </ParameterTypes>
+            <Parameters>
+              <Union SizeInBit="4">
+                <Memory CodeSegment="%AID%_RS-04-00000" Offset="0" BitOffset="0" />
+                <Parameter Id="%AID%_UP-%TT%00001" Name="SafetySensorHsk" Offset="0" BitOffset="0" ParameterType="%AID%_PT-SafetySensor" Text="Hauptschließkante (HSK)" Value="0" />
+                <Parameter Id="%AID%_UP-%TT%00002" Name="SafetySensorNsk" Offset="0" BitOffset="2" ParameterType="%AID%_PT-SafetySensor" Text="Nebenschließkante (NSK)" Value="0" />
+              </Union>
+            </Parameters>
+            <ParameterRefs>
+              <ParameterRef Id="%AID%_P-%TT%00001_R-%TT%0000101" RefId="%AID%_UP-%TT%00001" />
+              <ParameterRef Id="%AID%_P-%TT%00002_R-%TT%0000201" RefId="%AID%_UP-%TT%00002" />
+            </ParameterRefs>
+            <ComObjectTable>
+              <ComObject Id="%AID%_O-%TT%00001" Name="SwitchInside"          Number="101" ObjectSize="1 Bit"  Text="Schalter innen" FunctionText="Schalten"                 ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00002" Name="SwitchOutside"         Number="102" ObjectSize="1 Bit"  Text="Schalter außen" FunctionText="Schalten"                 ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00011" Name="DoorStatus"            Number="111" ObjectSize="2 Bit"  Text="Tür"            FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-2-1" />
+              <ComObject Id="%AID%_O-%TT%00012" Name="DoorOpenClosed"        Number="112" ObjectSize="1 Bit"  Text="Tür"            FunctionText="Status Offen/Geschlossen" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-19" />
+              <ComObject Id="%AID%_O-%TT%00016" Name="DoorMode"              Number="116" ObjectSize="1 Byte" Text="Tür (0=geschlossen, 1=offen, 2=manuell, 3=automatisch)" FunctionText="Modus" ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-5-5" />
+              <ComObject Id="%AID%_O-%TT%00017" Name="DoorModeStatus"        Number="117" ObjectSize="1 Byte" Text="Tür (0=geschlossen, 1=offen, 2=manuell, 3=automatisch)" FunctionText="Status Modus" ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-5-5" />
+              <ComObject Id="%AID%_O-%TT%00021" Name="DoorLock"              Number="121" ObjectSize="1 Bit"  Text="Schloss"        FunctionText="Schalten"                 ReadFlag="Disabled" WriteFlag="Enabled"  CommunicationFlag="Enabled" TransmitFlag="Disabled" UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00022" Name="DoorLockStatus"        Number="122" ObjectSize="1 Bit"  Text="Schloss"        FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00031" Name="PresenceInsideStatus"  Number="131" ObjectSize="1 Bit"  Text="Präsenz innen"  FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00032" Name="PresenceOutsideStatus" Number="132" ObjectSize="1 Bit"  Text="Präsenz außen"  FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00036" Name="InfraredInsideStatus"  Number="136" ObjectSize="1 Bit"  Text="Infrarot innen" FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00037" Name="InfraredOutsideStatus" Number="137" ObjectSize="1 Bit"  Text="Infrarot außen" FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00038" Name="InfraredHskStatus"     Number="138" ObjectSize="1 Bit"  Text="Infrarot HSK"   FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+              <ComObject Id="%AID%_O-%TT%00039" Name="InfraredNskStatus"     Number="139" ObjectSize="1 Bit"  Text="Infrarot NSK"   FunctionText="Status"                   ReadFlag="Enabled"  WriteFlag="Disabled" CommunicationFlag="Enabled" TransmitFlag="Enabled"  UpdateFlag="Disabled" ReadOnInitFlag="Disabled" DatapointType="DPST-1-1" />
+            </ComObjectTable>
+            <ComObjectRefs>
+              <ComObjectRef Id="%AID%_O-%TT%00001_R-%TT%0000101" RefId="%AID%_O-%TT%00001" />
+              <ComObjectRef Id="%AID%_O-%TT%00002_R-%TT%0000201" RefId="%AID%_O-%TT%00002" />
+              <ComObjectRef Id="%AID%_O-%TT%00011_R-%TT%0001101" RefId="%AID%_O-%TT%00011" />
+              <ComObjectRef Id="%AID%_O-%TT%00012_R-%TT%0001201" RefId="%AID%_O-%TT%00012" />
+              <ComObjectRef Id="%AID%_O-%TT%00016_R-%TT%0001601" RefId="%AID%_O-%TT%00016" />
+              <ComObjectRef Id="%AID%_O-%TT%00017_R-%TT%0001701" RefId="%AID%_O-%TT%00017" />
+              <ComObjectRef Id="%AID%_O-%TT%00021_R-%TT%0002101" RefId="%AID%_O-%TT%00021" />
+              <ComObjectRef Id="%AID%_O-%TT%00022_R-%TT%0002201" RefId="%AID%_O-%TT%00022" />
+              <ComObjectRef Id="%AID%_O-%TT%00031_R-%TT%0003101" RefId="%AID%_O-%TT%00031" />
+              <ComObjectRef Id="%AID%_O-%TT%00032_R-%TT%0003201" RefId="%AID%_O-%TT%00032" />
+              <ComObjectRef Id="%AID%_O-%TT%00036_R-%TT%0003601" RefId="%AID%_O-%TT%00036" />
+              <ComObjectRef Id="%AID%_O-%TT%00037_R-%TT%0003701" RefId="%AID%_O-%TT%00037" />
+              <ComObjectRef Id="%AID%_O-%TT%00038_R-%TT%0003801" RefId="%AID%_O-%TT%00038" />
+              <ComObjectRef Id="%AID%_O-%TT%00039_R-%TT%0003901" RefId="%AID%_O-%TT%00039" />
+            </ComObjectRefs>
+            <Extension>
+              <Baggage RefId="%FILE-HELP-de%" />
+              <Baggage RefId="%FILE-ICONS%" />
+              <Baggage RefId="%FILE-openknx%" />
+              <Baggage RefId="%FILE-pics-and%" />
+              <Baggage RefId="%FILE-pics-or%" />
+            </Extension>
+          </Static>
+          <Dynamic>
+            <Channel Id="%AID%_CH-Basic" Name="BasicChannel" Number="1" Text="Door Controller">
+              <ParameterBlock Id="%AID%_PB-5" Name="Basic" Text="Grundeinstellung" Icon="cog-outline" HelpContext="Empty">
+                <ParameterSeparator Id="%AID%_PS-nnn" Text="Sicherheitssensoren" UIHint="Headline" />
+                <ParameterRefRef RefId="%AID%_P-%TT%00001_R-%TT%0000101" />
+                <ParameterRefRef RefId="%AID%_P-%TT%00002_R-%TT%0000201" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00001_R-%TT%0000101" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00002_R-%TT%0000201" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00011_R-%TT%0001101" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00012_R-%TT%0001201" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00016_R-%TT%0001601" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00017_R-%TT%0001701" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00021_R-%TT%0002101" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00022_R-%TT%0002201" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00031_R-%TT%0003101" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00032_R-%TT%0003201" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00036_R-%TT%0003601" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00037_R-%TT%0003701" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00038_R-%TT%0003801" />
+                <ComObjectRefRef RefId="%AID%_O-%TT%00039_R-%TT%0003901" />
+              </ParameterBlock>
+            </Channel>
+          </Dynamic>
+        </ApplicationProgram>
+      </ApplicationPrograms>
+      <!--<Baggages>
+        <Baggage TargetPath="" Name="Help_de.zip" Id="%FILE-HELP-de%">
+          <FileInfo TimeInfo="%DATETIME%" />
+        </Baggage>
+        <Baggage TargetPath="" Name="Icons.zip" Id="%FILE-ICONS%">
+          <FileInfo TimeInfo="%DATETIME%" />
+        </Baggage>
+      </Baggages>-->
+    </Manufacturer>
+  </ManufacturerData>
+</KNX>
