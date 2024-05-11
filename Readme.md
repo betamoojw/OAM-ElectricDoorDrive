@@ -20,16 +20,6 @@ Eine elektromagnetische Verriegelung (24 V) kann ebenfalls angeschlossen werden.
 
 ## Kompatible Hardware
 
-Die OpenKNX-kompatible Anbindung erfolgt über eine Steuerplatine, an welcher der Türantrieb sowie etwaige Sensoren angeschlossen werden:
+Die OpenKNX-kompatible Anbindung erfolgt über eine Steuerplatine, an welcher der Türantrieb sowie etwaige Sensoren angeschlossen werden.
 
-<kbd>![Haupt-PCB](hardware/pcb-main.png)</kbd>
-
-Diese Platine ist lediglich 7 x 5 cm groß und wird in der Nähe des Türantriebs montiert.
-
-Zur Vereinfachten Inbetriebnahme und Fehlersuche kann zudem eine Erweiterungsplatine angeschlossen werden, welche den aktuellen Tür- und Sensorstatus direkt sichtbar anzeigt:
-
-<kbd>![PCB-Erweiterung](hardware/pcb-extension.png)</kbd>
-
-Diese wird im laufenden Betrieb der Türsteuerung nicht benötigt.
-
-Bei Interesse an der Hardware oder Fragen zur Kompatibilität bestimmter Türantriebe/Sensoren bitte Kontakt über [E-Mail](mailto:info@ab-smarthouse.com?subject=[OpenKNX]%20DoorController) aufnehmen.
+Alle Infos zur kompatiblen Hardware findet sich [hier](https://www.ab-smarthouse.com/produkt/openknx-elektrische-tuersteuerung/) oder bei Interesse einfach Kontakt per [E-Mail](mailto:info@ab-smarthouse.com?subject=[OpenKNX]%20Electric%20Door%20Drive) aufnehmen.
