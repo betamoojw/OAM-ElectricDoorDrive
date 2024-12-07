@@ -14,6 +14,10 @@ const std::string DoorControllerModule::version()
 
 void DoorControllerModule::setup()
 {
+    logDebugP("Setup ElectricDoorDrive");
+    logIndentUp();
+
+    logDebugP("Setup PIN modes");
     pinMode(MAIN_TST_PIN, INPUT_PULLUP);
     pinMode(MAIN_NSK_PIN, OUTPUT_4MA);
     pinMode(MAIN_HSK_PIN, OUTPUT_4MA);
@@ -28,17 +32,22 @@ void DoorControllerModule::setup()
     pinMode(SENSOR_OUTSIDE_RAD_PIN, INPUT_PULLUP);
     pinMode(SENSOR_OUTSIDE_AIR_PIN, INPUT_PULLUP);
 
+    logDebugP("Get initial sensor states");
     sensorInsideRadActive = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
     sensorInsideAirActive = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
     sensorOutsideRadActive = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
     sensorOutsideAirActive = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
 
+    logDebugP("Attach interrupts");
     attachInterrupt(digitalPinToInterrupt(SENSOR_INSIDE_RAD_PIN), DoorControllerModule::interruptSensorInsideRadChange, CHANGE);
     attachInterrupt(digitalPinToInterrupt(SENSOR_INSIDE_AIR_PIN), DoorControllerModule::interruptSensorInsideAirChange, CHANGE);
     attachInterrupt(digitalPinToInterrupt(SENSOR_OUTSIDE_RAD_PIN), DoorControllerModule::interruptSensorOutsideRadChange, CHANGE);
     attachInterrupt(digitalPinToInterrupt(SENSOR_OUTSIDE_AIR_PIN), DoorControllerModule::interruptSensorOutsideAirChange, CHANGE);
 
     enableExtInterface();
+
+    logDebugP("Setup complete");
+    logIndentDown();
 }
 
 void DoorControllerModule::processInputKo(GroupObject &ko)
@@ -128,6 +137,8 @@ void DoorControllerModule::interruptSensorOutsideAirChange()
 
 void DoorControllerModule::enableExtInterface()
 {
+    logDebugP("Enable EXT interface");
+
     EXT_I2C_BUS.setSDA(EXT_I2C_SDA);
     EXT_I2C_BUS.setSCL(EXT_I2C_SCL);
     EXT_I2C_BUS.setClock(100000);

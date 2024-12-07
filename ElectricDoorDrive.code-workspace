@@ -75,7 +75,8 @@
 			"regex": "cpp",
 			"bitset": "cpp",
 			"iostream": "cpp",
-			"list": "cpp"
+			"list": "cpp",
+			"ranges": "cpp"
 		}
 	}
 }
