@@ -2,14 +2,15 @@
 #include "enum-helper.h"
 #include <Adafruit_MCP23X17.h>
 
-#define MAIN_TST_PIN 25
+#define MAIN_24V_PIN 26
+#define MAIN_TST_PIN 27
 #define MAIN_TST_THRESHOLD 100
 #define MAIN_TST_THRESHOLD_MARGIN 50
 #define MAIN_MLD_PIN 18
 #define MAIN_MLD_ACTIVE HIGH
 #define MAIN_MLD_INACTIVE LOW
 #define MAIN_NSK_PIN 19
-#define MAIN_HSK_PIN 22
+#define MAIN_HSK_PIN 17
 #define MAIN_HSK_NSK_ACTIVE LOW
 #define MAIN_HSK_NSK_INACTIVE HIGH
 #define MAIN_LCK_PIN 16
@@ -17,14 +18,15 @@
 #define MAIN_LCK_INACTIVE LOW
 #define MAIN_SIGNAL_LENGTH 100
 
+#define DOOR_SENSOR_PWR_PIN 23
 #define DOOR_OPEN_PIN 29
 #define DOOR_CLOSED_PIN 28
-#define DOOR_SENSOR_THRESHOLD 450 // threshold with 100 Ohm resistor
+#define DOOR_SENSOR_THRESHOLD 500 // threshold with 220 Ohm resistor
 #define DOOR_SENSOR_THRESHOLD_MARGIN 10
 #define DOOR_OPEN_MIN 3000
 #define DOOR_STATE_CHANGED_TIMEOUT 3000
 
-#define LOCK_PIN 16
+#define LOCK_PIN 25
 #define LOCK_ACTIVE HIGH
 #define LOCK_INACTIVE LOW
 #define LOCK_REQUEST_MLD_TIMEOUT 3000
@@ -32,10 +34,10 @@
 #define SENSOR_TST_PIN 24
 #define SENSOR_TST_ACTIVE HIGH
 #define SENSOR_TST_INACTIVE LOW
-#define SENSOR_INSIDE_RAD_PIN 7
-#define SENSOR_INSIDE_AIR_PIN 8
-#define SENSOR_OUTSIDE_RAD_PIN 5
-#define SENSOR_OUTSIDE_AIR_PIN 6
+#define SENSOR_INSIDE_RAD_PIN 5
+#define SENSOR_INSIDE_AIR_PIN 6
+#define SENSOR_OUTSIDE_RAD_PIN 7
+#define SENSOR_OUTSIDE_AIR_PIN 8
 #define SENSOR_RAD_ACTIVE LOW
 #define SENSOR_AIR_ACTIVE HIGH
 
@@ -171,14 +173,22 @@ class DoorControllerModule : public OpenKNX::Module
     EXT2_A ext2ALastSent = (EXT2_A)255u;
     EXT2_B ext2BLastSent = (EXT2_B)255u;
 
-    inline volatile static bool mainTstActive;
-    inline volatile static bool sensorTstActive;
-    inline volatile static bool sensorInsideRadActive;
-    inline volatile static bool sensorInsideAirActive;
-    inline volatile static bool sensorOutsideRadActive;
-    inline volatile static bool sensorOutsideAirActive;
+    bool mainTstActive = false;
+    bool sensorTstActive = false;
+    bool sensorInsideRadActive = false;
+    bool sensorInsideAirActive = false;
+    bool sensorOutsideRadActive = false;
+    bool sensorOutsideAirActive = false;
+    inline volatile static bool sensorInsideRadActiveNew = false;
+    inline volatile static bool sensorInsideAirActiveNew = false;
+    inline volatile static bool sensorOutsideRadActiveNew = false;
+    inline volatile static bool sensorOutsideAirActiveNew = false;
 
     void enableExtInterface();
+    void processSensorInsideRadChange();
+    void processSensorInsideAirChange();
+    void processSensorOutsideRadChange();
+    void processSensorOutsideAirChange();
     void processTestSignal();
     void checkProtection();
     void updateDoorState();

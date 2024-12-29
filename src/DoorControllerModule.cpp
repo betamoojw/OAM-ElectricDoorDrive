@@ -18,11 +18,14 @@ void DoorControllerModule::setup()
     logIndentUp();
 
     logDebugP("Setup PIN modes");
-    pinMode(MAIN_TST_PIN, INPUT_PULLUP);
+    pinMode(MAIN_24V_PIN, INPUT);
+    pinMode(MAIN_TST_PIN, INPUT);
     pinMode(MAIN_NSK_PIN, OUTPUT_4MA);
     pinMode(MAIN_HSK_PIN, OUTPUT_4MA);
     pinMode(MAIN_MLD_PIN, OUTPUT_4MA);
     pinMode(MAIN_LCK_PIN, OUTPUT_4MA);
+    pinMode(DOOR_SENSOR_PWR_PIN, OUTPUT_4MA);
+    digitalWrite(DOOR_SENSOR_PWR_PIN, HIGH);
     pinMode(DOOR_OPEN_PIN, INPUT);
     pinMode(DOOR_CLOSED_PIN, INPUT);
     pinMode(LOCK_PIN, OUTPUT_4MA);
@@ -33,10 +36,10 @@ void DoorControllerModule::setup()
     pinMode(SENSOR_OUTSIDE_AIR_PIN, INPUT_PULLUP);
 
     logDebugP("Get initial sensor states");
-    sensorInsideRadActive = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
-    sensorInsideAirActive = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
-    sensorOutsideRadActive = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
-    sensorOutsideAirActive = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorInsideRadActiveNew = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorInsideAirActiveNew = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorOutsideRadActiveNew = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorOutsideAirActiveNew = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
 
     logDebugP("Attach interrupts");
     attachInterrupt(digitalPinToInterrupt(SENSOR_INSIDE_RAD_PIN), DoorControllerModule::interruptSensorInsideRadChange, CHANGE);
@@ -117,22 +120,22 @@ void DoorControllerModule::writeFlash()
 
 void DoorControllerModule::interruptSensorInsideRadChange()
 {
-    sensorInsideRadActive = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorInsideRadActiveNew = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
 }
 
 void DoorControllerModule::interruptSensorInsideAirChange()
 {
-    sensorInsideAirActive = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorInsideAirActiveNew = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
 }
 
 void DoorControllerModule::interruptSensorOutsideRadChange()
 {
-    sensorOutsideRadActive = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorOutsideRadActiveNew = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
 }
 
 void DoorControllerModule::interruptSensorOutsideAirChange()
 {
-    sensorOutsideAirActive = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorOutsideAirActiveNew = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
 }
 
 void DoorControllerModule::enableExtInterface()
@@ -163,6 +166,11 @@ void DoorControllerModule::enableExtInterface()
 
 void DoorControllerModule::loop()
 {
+    processSensorInsideRadChange();
+    processSensorInsideAirChange();
+    processSensorOutsideRadChange();
+    processSensorOutsideAirChange();
+
     processTestSignal();
     checkProtection();
     updateDoorState();
@@ -170,44 +178,102 @@ void DoorControllerModule::loop()
     updateExtensionOutputs();
 }
 
+void DoorControllerModule::processSensorInsideRadChange()
+{
+    if (sensorInsideRadActive != sensorInsideRadActiveNew)
+    {
+        sensorInsideRadActive = sensorInsideRadActiveNew;
+        logDebugP("sensorInsideRadActive: %i", sensorInsideRadActive);
+    }
+}
+
+void DoorControllerModule::processSensorInsideAirChange()
+{
+    if (sensorInsideAirActive != sensorInsideAirActiveNew)
+    {
+        sensorInsideAirActive = sensorInsideAirActiveNew;
+        logDebugP("sensorInsideAirActive: %i", sensorInsideAirActive);
+    }
+}
+
+void DoorControllerModule::processSensorOutsideRadChange()
+{
+    if (sensorOutsideRadActive != sensorOutsideRadActiveNew)
+    {
+        sensorOutsideRadActive = sensorOutsideRadActiveNew;
+        logDebugP("sensorOutsideRadActive: %i", sensorOutsideRadActive);
+    }
+}
+
+void DoorControllerModule::processSensorOutsideAirChange()
+{
+    if (sensorOutsideAirActive != sensorOutsideAirActiveNew)
+    {
+        sensorOutsideAirActive = sensorOutsideAirActiveNew;
+        logDebugP("sensorOutsideAirActive: %i", sensorOutsideAirActive);
+    }
+}
+
 void DoorControllerModule::processTestSignal()
 {
     int testSignal = analogRead(MAIN_TST_PIN);
     if (testSignal <= MAIN_TST_THRESHOLD - MAIN_TST_THRESHOLD_MARGIN)
     {
-        digitalWrite(SENSOR_TST_PIN, SENSOR_TST_INACTIVE);
-        sensorTstActive = false;
-        mainTstActive = false;
+        if (mainTstActive)
+        {
+            digitalWrite(SENSOR_TST_PIN, SENSOR_TST_INACTIVE);
+            sensorTstActive = false;
+            mainTstActive = false;
+
+            logDebugP("mainTstActive: %i", mainTstActive);
+        }
     }
     else if (testSignal > MAIN_TST_THRESHOLD + MAIN_TST_THRESHOLD_MARGIN)
     {
-        digitalWrite(SENSOR_TST_PIN, SENSOR_TST_ACTIVE);
-        sensorTstActive = true;
-        mainTstActive = true;
+        if (!mainTstActive)
+        {
+            digitalWrite(SENSOR_TST_PIN, SENSOR_TST_ACTIVE);
+            sensorTstActive = true;
+            mainTstActive = true;
+
+            logDebugP("mainTstActive: %i", mainTstActive);
+        }
     }
 }
 
 void DoorControllerModule::checkProtection()
 {
-    mainHskActive = false;
+    bool mainHskActiveNew = false;
     if (ParamDOR_SafetySensorHsk == 1)
-        mainHskActive = sensorInsideAirActive;
+        mainHskActiveNew = sensorInsideAirActive;
     else if (ParamDOR_SafetySensorHsk == 2)
-        mainHskActive = sensorOutsideAirActive;
+        mainHskActiveNew = sensorOutsideAirActive;
     else if (ParamDOR_SafetySensorHsk == 3)
-        mainHskActive = sensorInsideAirActive || sensorOutsideAirActive;
+        mainHskActiveNew = sensorInsideAirActive || sensorOutsideAirActive;
 
-    digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
+    if (mainHskActive != mainHskActiveNew)
+    {
+        mainHskActive = mainHskActiveNew;
+        digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
 
-    mainNskActive = false;
+        logDebugP("mainHskActive: %i", mainHskActive);
+    }
+
+    bool mainNskActiveNew = false;
     if (ParamDOR_SafetySensorNsk == 1)
-        mainNskActive = sensorInsideAirActive;
+        mainNskActiveNew = sensorInsideAirActive;
     else if (ParamDOR_SafetySensorNsk == 2)
-        mainNskActive = sensorOutsideAirActive;
+        mainNskActiveNew = sensorOutsideAirActive;
     else if (ParamDOR_SafetySensorNsk == 3)
-        mainNskActive = sensorInsideAirActive || sensorOutsideAirActive;
+        mainNskActiveNew = sensorInsideAirActive || sensorOutsideAirActive;
 
-    digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
+    if (mainNskActive != mainNskActiveNew)
+    {
+        mainNskActive = mainNskActiveNew;
+        digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
+
+        logDebugP("mainNskActive: %i", mainNskActive);
+    }
 }
 
 void DoorControllerModule::updateDoorState()
@@ -287,6 +353,8 @@ void DoorControllerModule::processDoorStateMachine()
             digitalWrite(MAIN_LCK_PIN, MAIN_LCK_INACTIVE);
             mainLckActive = false;
             mainLckStart = 0;
+
+            logDebugP("mainLckActive: %i", mainLckActive);
         }
     }
 
@@ -448,9 +516,14 @@ void DoorControllerModule::sendMainMld(bool active)
 
 void DoorControllerModule::lock(bool active)
 {
-    digitalWrite(MAIN_LCK_PIN, MAIN_LCK_ACTIVE);
-    mainLckActive = true;
-    mainLckStart = millis();
+    if (!mainLckActive)
+    {
+        digitalWrite(MAIN_LCK_PIN, MAIN_LCK_ACTIVE);
+        mainLckActive = true;
+        mainLckStart = millis();
+
+        logDebugP("mainLckActive: %i", mainLckActive);
+    }
 
     digitalWrite(LOCK_PIN, active ? LOCK_ACTIVE : LOCK_INACTIVE);
     KoDOR_DoorLockStatus.valueNoSend(active, DPT_Switch);

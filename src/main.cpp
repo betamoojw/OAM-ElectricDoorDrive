@@ -16,7 +16,7 @@ void setup()
     openknx.setup();
 
     // call direct for testing without KNX connected
-    // openknx.modules.list[0]->setup();
+    //openknxDoorControllerModule.setup();
 }
 
 void loop()
@@ -24,5 +24,5 @@ void loop()
     openknx.loop();
 
     // call direct for testing without KNX connected
-    // openknx.modules.list[0]->loop();
+    //openknxDoorControllerModule.loop();
 }
