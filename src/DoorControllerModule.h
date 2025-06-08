@@ -18,6 +18,7 @@
 #define MAIN_SIGNAL_LENGTH 100
 
 #define DOOR_SENSOR_PWR_PIN 23
+#define DOOR_SENSOR_PWR_ACTIVE HIGH
 #define DOOR_OPEN_PIN 29
 #define DOOR_CLOSED_PIN 28
 #define DOOR_SENSOR_THRESHOLD 500 // threshold with 220 Ohm resistor
