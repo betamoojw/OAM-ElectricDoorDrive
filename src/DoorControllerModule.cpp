@@ -18,7 +18,7 @@ void DoorControllerModule::setup()
     logIndentUp();
 
     logDebugP("Setup PIN modes");
-    pinMode(MAIN_24V_PIN, INPUT);
+    pinMode(MAIN_PWR_PIN, INPUT);
     pinMode(MAIN_TST_PIN, INPUT);
     pinMode(MAIN_NSK_PIN, OUTPUT_4MA);
     pinMode(MAIN_HSK_PIN, OUTPUT_4MA);
@@ -144,22 +144,28 @@ void DoorControllerModule::enableExtInterface()
 
     EXT_I2C_BUS.setSDA(EXT_I2C_SDA);
     EXT_I2C_BUS.setSCL(EXT_I2C_SCL);
+    EXT_I2C_BUS.begin();
     EXT_I2C_BUS.setClock(100000);
 
-    extMcp1.begin_I2C(EXT1_MCP23017_ADR, &EXT_I2C_BUS);
-    extMcp2.begin_I2C(EXT2_MCP23017_ADR, &EXT_I2C_BUS);
-    for (size_t i = 0; i < 16; i++)
+    if (extTca1.begin() &&
+        extTca2.begin())
     {
-        extMcp1.pinMode(i, OUTPUT);
-
-        if (i <= 8)
+        for (size_t i = 0; i < 16; i++)
         {
-            if (i == EXT2_KNX_PRG_SWITCH_PIN)
-                extMcp2.pinMode(i, INPUT_PULLUP);
-            else
-                extMcp2.pinMode(i, OUTPUT);
+            extTca1.pinMode1(i, OUTPUT);
+
+            // if (i == EXT2_KNX_PRG_SWITCH_PIN)
+            // {
+            //     extTca2.pinMode(i, INPUT_PULLUP);
+            // }
+            // else
+                extTca2.pinMode1(i, OUTPUT);
         }
+
+        logDebugP("TCA9555 setup done with address %u and %u", extTca1.getAddress(), extTca2.getAddress());
     }
+    else
+        logDebugP("TCA9555 not found at address %u and %u", extTca1.getAddress(), extTca2.getAddress());
 
     ext2B = ext2B | EXT2_B::POWER_RUN;
 }
@@ -173,6 +179,7 @@ void DoorControllerModule::loop()
 
     processTestSignal();
     checkProtection();
+    checkDoorPower();
     updateDoorState();
     processDoorStateMachine();
     updateExtensionOutputs();
@@ -217,7 +224,7 @@ void DoorControllerModule::processSensorOutsideAirChange()
 void DoorControllerModule::processTestSignal()
 {
     int testSignal = analogRead(MAIN_TST_PIN);
-    if (testSignal <= MAIN_TST_THRESHOLD - MAIN_TST_THRESHOLD_MARGIN)
+    if (testSignal > MAIN_TST_THRESHOLD + MAIN_TST_THRESHOLD_MARGIN)
     {
         if (mainTstActive)
         {
@@ -228,7 +235,7 @@ void DoorControllerModule::processTestSignal()
             logDebugP("mainTstActive: %i", mainTstActive);
         }
     }
-    else if (testSignal > MAIN_TST_THRESHOLD + MAIN_TST_THRESHOLD_MARGIN)
+    else if (testSignal < MAIN_TST_THRESHOLD - MAIN_TST_THRESHOLD_MARGIN)
     {
         if (!mainTstActive)
         {
@@ -273,6 +280,27 @@ void DoorControllerModule::checkProtection()
         digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
 
         logDebugP("mainNskActive: %i", mainNskActive);
+    }
+}
+
+void DoorControllerModule::checkDoorPower()
+{
+    int testSignal = analogRead(MAIN_PWR_PIN);
+    if (testSignal <= MAIN_PWR_THRESHOLD - MAIN_PWR_THRESHOLD_MARGIN)
+    {
+        if (mainPwrActive)
+        {
+            mainPwrActive = false;
+            logDebugP("mainPwrActive: %i", mainPwrActive);
+        }
+    }
+    else if (testSignal > MAIN_PWR_THRESHOLD + MAIN_PWR_THRESHOLD_MARGIN)
+    {
+        if (!mainPwrActive)
+        {
+            mainPwrActive = true;
+            logDebugP("mainPwrActive: %i", mainPwrActive);
+        }
     }
 }
 
@@ -532,6 +560,15 @@ void DoorControllerModule::lock(bool active)
 
 void DoorControllerModule::updateExtensionOutputs()
 {
+    if (!extTca1.isConnected() ||
+        !extTca2.isConnected())
+        return;
+
+    if (mainPwrActive)
+        ext1B = ext1B | EXT1_B::MAIN_PWR;
+    else
+        ext1B = ext1B & ~EXT1_B::MAIN_PWR;
+
     if (mainMldActive)
         ext1B = ext1B | EXT1_B::MAIN_MLD;
     else
@@ -558,14 +595,14 @@ void DoorControllerModule::updateExtensionOutputs()
         ext1B = ext1B & ~EXT1_B::MAIN_LCK;
 
     if (doorState == DoorState::CLOSED)
-        ext1B = ext1B | EXT1_B::DOOR_CLD;
+        ext1A = ext1A | EXT1_A::DOOR_CLD;
     else
-        ext1B = ext1B & ~EXT1_B::DOOR_CLD;
+        ext1A = ext1A & ~EXT1_A::DOOR_CLD;
 
     if (doorState == DoorState::OPEN)
-        ext1B = ext1B | EXT1_B::DOOR_OPN;
+        ext1A = ext1A | EXT1_A::DOOR_OPN;
     else
-        ext1B = ext1B & ~EXT1_B::DOOR_OPN;
+        ext1A = ext1A & ~EXT1_A::DOOR_OPN;
 
     if (sensorInsideRadActive)
         ext1B = ext1B | EXT1_B::SENSOR_INSIDE_RAD;
@@ -573,9 +610,9 @@ void DoorControllerModule::updateExtensionOutputs()
         ext1B = ext1B & ~EXT1_B::SENSOR_INSIDE_RAD;
 
     if (sensorInsideAirActive)
-        ext2A = ext2A | EXT2_A::SENSOR_INSIDE_AIR;
+        ext1B = ext1B | EXT1_B::SENSOR_INSIDE_AIR;
     else
-        ext2A = ext2A & ~EXT2_A::SENSOR_INSIDE_AIR;
+        ext1B = ext1B & ~EXT1_B::SENSOR_INSIDE_AIR;
 
     if (sensorTstActive)
         ext2A = ext2A | EXT2_A::SENSOR_INSIDE_TST;
@@ -618,52 +655,52 @@ void DoorControllerModule::updateExtensionOutputs()
     }
 
     if (lockRequested)
-        ext1A = ext1A | EXT1_A::LOCK_RQT;
+        ext2B = ext2B | EXT2_B::LOCK_RQT;
     else
-        ext1A = ext1A & ~EXT1_A::LOCK_RQT;
+        ext2B = ext2B & ~EXT2_B::LOCK_RQT;
 
     if (lockActive)
-        ext1A = ext1A | EXT1_A::LOCK_ACT;
+        ext2B = ext2B | EXT2_B::LOCK_ACT;
     else
-        ext1A = ext1A & ~EXT1_A::LOCK_ACT;
+        ext2B = ext2B & ~EXT2_B::LOCK_ACT;
 
-    if (millis() - extProgSwitchLastTrigger >= EXT2_KNX_PRG_SWITCH_DEBOUNCE &&
-        extMcp2.digitalRead(EXT2_KNX_PRG_SWITCH_PIN) == EXT2_KNX_PRG_SWITCH_ACTIVE)
-    {
-        extProgSwitchLastTrigger = millis();
-        knx.toggleProgMode();
-    }
+    // if (millis() - extProgSwitchLastTrigger >= EXT2_KNX_PRG_SWITCH_DEBOUNCE &&
+    //     extTca2.read1(EXT2_KNX_PRG_SWITCH_PIN) == EXT2_KNX_PRG_SWITCH_ACTIVE)
+    // {
+    //     extProgSwitchLastTrigger = millis();
+    //     knx.toggleProgMode();
+    // }
 
     if (knx.progMode())
-        ext2A = ext2A | EXT2_A::KNX_PRG;
+        ext2B = ext2B | EXT2_B::KNX_PRG;
     else
-        ext2A = ext2A & ~EXT2_A::KNX_PRG;
+        ext2B = ext2B & ~EXT2_B::KNX_PRG;
 
     if (ext1ALastSent != ext1A)
     {
         ext1ALastSent = ext1A;
-        extMcp1.writeGPIOA((u_int8_t)ext1A);
+        extTca1.write8(0, (u_int8_t)ext1A);
         logDebugP("ext1A: %d", (u_int8_t)ext1A);
     }
 
     if (ext1BLastSent != ext1B)
     {
         ext1BLastSent = ext1B;
-        extMcp1.writeGPIOB((u_int8_t)ext1B);
+        extTca1.write8(1, (u_int8_t)ext1B);
         logDebugP("ext1B: %d", (u_int8_t)ext1B);
     }
 
     if (ext2ALastSent != ext2A)
     {
         ext2ALastSent = ext2A;
-        extMcp2.writeGPIOA((u_int8_t)ext2A);
+        extTca2.write8(0, (u_int8_t)ext2A);
         logDebugP("ext2A: %d", (u_int8_t)ext2A);
     }
 
     if (ext2BLastSent != ext2B)
     {
         ext2BLastSent = ext2B;
-        extMcp2.writeGPIOB((u_int8_t)ext2B);
+        extTca2.write8(1, (u_int8_t)ext2B);
         logDebugP("ext2B: %d", (u_int8_t)ext2B);
     }
 }
