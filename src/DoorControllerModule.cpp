@@ -228,7 +228,7 @@ void DoorControllerModule::processTestSignal()
     {
         if (mainTstActive)
         {
-            digitalWrite(SENSOR_TST_PIN, SENSOR_TST_INACTIVE);
+            digitalWrite(SENSOR_TST_PIN, !SENSOR_TST_ACTIVE);
             sensorTstActive = false;
             mainTstActive = false;
 
@@ -261,7 +261,7 @@ void DoorControllerModule::checkProtection()
     if (mainHskActive != mainHskActiveNew)
     {
         mainHskActive = mainHskActiveNew;
-        digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
+        digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
 
         logDebugP("mainHskActive: %i", mainHskActive);
     }
@@ -277,7 +277,7 @@ void DoorControllerModule::checkProtection()
     if (mainNskActive != mainNskActiveNew)
     {
         mainNskActive = mainNskActiveNew;
-        digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : MAIN_HSK_NSK_INACTIVE);
+        digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
 
         logDebugP("mainNskActive: %i", mainNskActive);
     }
@@ -378,7 +378,7 @@ void DoorControllerModule::processDoorStateMachine()
     {
         if ((millis() - mainLckStart >= MAIN_SIGNAL_LENGTH))
         {
-            digitalWrite(MAIN_LCK_PIN, MAIN_LCK_INACTIVE);
+            digitalWrite(MAIN_LCK_PIN, !MAIN_LCK_ACTIVE);
             mainLckActive = false;
             mainLckStart = 0;
 
@@ -537,7 +537,7 @@ void DoorControllerModule::sendMainMld(bool active)
     doorStateChanged = false;
     doorStateLastChanged = millis();
 
-    digitalWrite(MAIN_MLD_PIN, active ? MAIN_MLD_ACTIVE : MAIN_MLD_INACTIVE);
+    digitalWrite(MAIN_MLD_PIN, active ? MAIN_MLD_ACTIVE : !MAIN_MLD_ACTIVE);
     mainMldActive = active;
     mainMdlStart = active ? millis() : 0;
 }
@@ -553,7 +553,7 @@ void DoorControllerModule::lock(bool active)
         logDebugP("mainLckActive: %i", mainLckActive);
     }
 
-    digitalWrite(LOCK_PIN, active ? LOCK_ACTIVE : LOCK_INACTIVE);
+    digitalWrite(LOCK_PIN, active ? LOCK_ACTIVE : !LOCK_ACTIVE);
     KoDOR_DoorLockStatus.valueNoSend(active, DPT_Switch);
     lockActive = active;
 }
