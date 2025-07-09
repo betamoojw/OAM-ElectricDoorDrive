@@ -334,6 +334,9 @@ void DoorControllerModule::updateDoorState()
             doorState = DoorState::OPENING;
     }
 
+    // for end stop sensor tuning:
+    // logDebugP("doorOpen: %i, doorClosed: %i", doorOpen, doorClosed);
+
     if (doorStatePrevious != doorState)
     {
         if (doorState != DoorState::UNDEFINED)
