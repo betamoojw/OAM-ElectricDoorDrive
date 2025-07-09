@@ -21,7 +21,7 @@
 #define DOOR_SENSOR_PWR_ACTIVE HIGH
 #define DOOR_OPEN_PIN 29
 #define DOOR_CLOSED_PIN 28
-#define DOOR_SENSOR_THRESHOLD 500 // threshold with 220 Ohm resistor
+#define DOOR_SENSOR_THRESHOLD 540 // threshold with 220 Ohm resistor (off is 580-590)
 #define DOOR_SENSOR_THRESHOLD_MARGIN 10
 #define DOOR_OPEN_MIN 3000
 #define DOOR_STATE_CHANGED_TIMEOUT 3000
