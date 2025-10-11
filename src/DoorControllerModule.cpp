@@ -19,19 +19,15 @@ void DoorControllerModule::setup()
 
     logDebugP("Setup PIN modes");
     pinMode(MAIN_PWR_PIN, INPUT);
-    pinMode(MAIN_TST_PIN, INPUT);
-    pinMode(MAIN_NSK_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_NSK_PIN, !MAIN_HSK_NSK_ACTIVE);
-    pinMode(MAIN_HSK_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_HSK_PIN, !MAIN_HSK_NSK_ACTIVE);
-    pinMode(MAIN_MLD_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_MLD_PIN, !MAIN_MLD_ACTIVE);
-    pinMode(MAIN_LCK_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_LCK_PIN, !MAIN_LCK_ACTIVE);
-    pinMode(DOOR_SENSOR_PWR_PIN, OUTPUT_4MA);
-    digitalWrite(DOOR_SENSOR_PWR_PIN, DOOR_SENSOR_PWR_ACTIVE);
-    pinMode(DOOR_OPEN_PIN, INPUT);
-    pinMode(DOOR_CLOSED_PIN, INPUT);
+    pinMode(MAIN_DOOR_MASTER_PIN, OUTPUT_4MA);
+    digitalWrite(MAIN_DOOR_MASTER_PIN, !MAIN_DOOR_MASTER_ACTIVE);
+    pinMode(MAIN_DOOR_ENABLE_PIN, OUTPUT_4MA);
+    digitalWrite(MAIN_DOOR_ENABLE_PIN, MAIN_DOOR_ENABLE_ACTIVE);
+
+    doorSerial.begin();
+    if (doorSerial.isConnected())
+        logDebugP("Door serial port is connected");
+    
     pinMode(LOCK_PIN, OUTPUT_4MA);
     digitalWrite(LOCK_PIN, !LOCK_ACTIVE);
     pinMode(SENSOR_TST_PIN, OUTPUT_4MA);
@@ -178,6 +174,8 @@ void DoorControllerModule::enableExtInterface()
 
 void DoorControllerModule::loop()
 {
+    processDoorSerial();
+
     processSensorInsideRadChange();
     processSensorInsideAirChange();
     processSensorOutsideRadChange();
@@ -189,6 +187,15 @@ void DoorControllerModule::loop()
     updateDoorState();
     processDoorStateMachine();
     updateExtensionOutputs();
+}
+
+void DoorControllerModule::processDoorSerial()
+{
+    uint8_t data[32];
+    size_t dataLength = doorSerial.readBinaryData(data, 32);
+
+    logDebugP("DoorSerial: Read data");
+    logHexDebugP(data, dataLength);
 }
 
 void DoorControllerModule::processSensorInsideRadChange()
@@ -229,29 +236,29 @@ void DoorControllerModule::processSensorOutsideAirChange()
 
 void DoorControllerModule::processTestSignal()
 {
-    int testSignal = analogRead(MAIN_TST_PIN);
-    if (testSignal > MAIN_TST_THRESHOLD + MAIN_TST_THRESHOLD_MARGIN)
-    {
-        if (mainTstActive)
-        {
-            digitalWrite(SENSOR_TST_PIN, !SENSOR_TST_ACTIVE);
-            sensorTstActive = false;
-            mainTstActive = false;
+    // int testSignal = analogRead(MAIN_TST_PIN);
+    // if (testSignal > MAIN_TST_THRESHOLD + MAIN_TST_THRESHOLD_MARGIN)
+    // {
+    //     if (mainTstActive)
+    //     {
+    //         digitalWrite(SENSOR_TST_PIN, !SENSOR_TST_ACTIVE);
+    //         sensorTstActive = false;
+    //         mainTstActive = false;
 
-            logDebugP("mainTstActive: %i", mainTstActive);
-        }
-    }
-    else if (testSignal < MAIN_TST_THRESHOLD - MAIN_TST_THRESHOLD_MARGIN)
-    {
-        if (!mainTstActive)
-        {
-            digitalWrite(SENSOR_TST_PIN, SENSOR_TST_ACTIVE);
-            sensorTstActive = true;
-            mainTstActive = true;
+    //         logDebugP("mainTstActive: %i", mainTstActive);
+    //     }
+    // }
+    // else if (testSignal < MAIN_TST_THRESHOLD - MAIN_TST_THRESHOLD_MARGIN)
+    // {
+    //     if (!mainTstActive)
+    //     {
+    //         digitalWrite(SENSOR_TST_PIN, SENSOR_TST_ACTIVE);
+    //         sensorTstActive = true;
+    //         mainTstActive = true;
 
-            logDebugP("mainTstActive: %i", mainTstActive);
-        }
-    }
+    //         logDebugP("mainTstActive: %i", mainTstActive);
+    //     }
+    // }
 }
 
 void DoorControllerModule::checkProtection()
@@ -267,7 +274,7 @@ void DoorControllerModule::checkProtection()
     if (mainHskActive != mainHskActiveNew)
     {
         mainHskActive = mainHskActiveNew;
-        digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
+        //digitalWrite(MAIN_HSK_PIN, mainHskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
 
         logDebugP("mainHskActive: %i", mainHskActive);
     }
@@ -283,7 +290,7 @@ void DoorControllerModule::checkProtection()
     if (mainNskActive != mainNskActiveNew)
     {
         mainNskActive = mainNskActiveNew;
-        digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
+        //digitalWrite(MAIN_NSK_PIN, mainNskActive ? MAIN_HSK_NSK_ACTIVE : !MAIN_HSK_NSK_ACTIVE);
 
         logDebugP("mainNskActive: %i", mainNskActive);
     }
@@ -312,30 +319,7 @@ void DoorControllerModule::checkDoorPower()
 
 void DoorControllerModule::updateDoorState()
 {
-    int doorOpen = analogRead(DOOR_OPEN_PIN);
-    if (doorOpen <= DOOR_SENSOR_THRESHOLD - DOOR_SENSOR_THRESHOLD_MARGIN)
-    {
-        doorState = DoorState::OPEN;
-    }
-    else if (doorOpen > DOOR_SENSOR_THRESHOLD + DOOR_SENSOR_THRESHOLD_MARGIN)
-    {
-        if (doorState == DoorState::OPEN)
-            doorState = DoorState::CLOSING;
-    }
-
-    int doorClosed = analogRead(DOOR_CLOSED_PIN);
-    if (doorClosed <= DOOR_SENSOR_THRESHOLD - DOOR_SENSOR_THRESHOLD_MARGIN)
-    {
-        doorState = DoorState::CLOSED;
-    }
-    else if (doorClosed > DOOR_SENSOR_THRESHOLD + DOOR_SENSOR_THRESHOLD_MARGIN)
-    {
-        if (doorState == DoorState::CLOSED)
-            doorState = DoorState::OPENING;
-    }
-
-    // for end stop sensor tuning:
-    // logDebugP("doorOpen: %i, doorClosed: %i", doorOpen, doorClosed);
+    //###ToDo
 
     if (doorStatePrevious != doorState)
     {
@@ -350,20 +334,20 @@ void DoorControllerModule::updateDoorState()
 
             case DoorState::OPEN:
                 KoDOR_DoorOpenClosed.valueNoSend(true, DPT_Window_Door);
-                logDebugP("DoorState: OPEN (doorOpen=%d, doorClosed=%d)", doorOpen, doorClosed);
+                logDebugP("DoorState: OPEN");
                 break;
 
             case DoorState::CLOSED:
                 KoDOR_DoorOpenClosed.valueNoSend(false, DPT_Window_Door);
-                logDebugP("DoorState: CLOSED (doorOpen=%d, doorClosed=%d)", doorOpen, doorClosed);
+                logDebugP("DoorState: CLOSED");
                 break;
 
             case DoorState::OPENING:
-                logDebugP("DoorState: OPENING (doorOpen=%d, doorClosed=%d)", doorOpen, doorClosed);
+                logDebugP("DoorState: OPENING");
                 break;
 
             case DoorState::CLOSING:
-                logDebugP("DoorState: CLOSING (doorOpen=%d, doorClosed=%d)", doorOpen, doorClosed);
+                logDebugP("DoorState: CLOSING");
                 break;
         }
 
@@ -383,36 +367,36 @@ void DoorControllerModule::processDoorStateMachine()
         doorMode != DoorMode::MANUAL)
         return;
 
-    if (mainLckStart > 0)
-    {
-        if ((millis() - mainLckStart >= MAIN_SIGNAL_LENGTH))
-        {
-            digitalWrite(MAIN_LCK_PIN, !MAIN_LCK_ACTIVE);
-            mainLckActive = false;
-            mainLckStart = 0;
+    // if (mainLckStart > 0)
+    // {
+    //     if ((millis() - mainLckStart >= MAIN_SIGNAL_LENGTH))
+    //     {
+    //         digitalWrite(MAIN_LCK_PIN, !MAIN_LCK_ACTIVE);
+    //         mainLckActive = false;
+    //         mainLckStart = 0;
 
-            logDebugP("mainLckActive: %i", mainLckActive);
-        }
-    }
+    //         logDebugP("mainLckActive: %i", mainLckActive);
+    //     }
+    // }
 
-    if (mainMdlStart > 0)
-    {
-        if ((millis() - mainMdlStart >= MAIN_SIGNAL_LENGTH))
-            sendMainMld(false);
-    }
-    else if (lockRequested != lockActive)
-    {
-        if (doorStateMachine == DoorStateMachine::STATE_CLOSED ||
-            doorStateMachine == DoorStateMachine::STATE_CLOSED_LOCKED)
-        {
-            lock(lockRequested);
-        }
-        else if (millis() - lastLockRequestMld >= LOCK_REQUEST_MLD_TIMEOUT)
-        {
-            sendMainMld(true);
-            lastLockRequestMld = millis();
-        }
-    }
+    // if (mainMdlStart > 0)
+    // {
+    //     if ((millis() - mainMdlStart >= MAIN_SIGNAL_LENGTH))
+    //         sendMainMld(false);
+    // }
+    // else if (lockRequested != lockActive)
+    // {
+    //     if (doorStateMachine == DoorStateMachine::STATE_CLOSED ||
+    //         doorStateMachine == DoorStateMachine::STATE_CLOSED_LOCKED)
+    //     {
+    //         lock(lockRequested);
+    //     }
+    //     else if (millis() - lastLockRequestMld >= LOCK_REQUEST_MLD_TIMEOUT)
+    //     {
+    //         sendMainMld(true);
+    //         lastLockRequestMld = millis();
+    //     }
+    // }
 
     bool triggerMld = false;
     switch (doorStateMachine)
@@ -546,25 +530,21 @@ void DoorControllerModule::sendMainMld(bool active)
     doorStateChanged = false;
     doorStateLastChanged = millis();
 
-    digitalWrite(MAIN_MLD_PIN, active ? MAIN_MLD_ACTIVE : !MAIN_MLD_ACTIVE);
-    mainMldActive = active;
-    mainMdlStart = active ? millis() : 0;
+    // digitalWrite(MAIN_MLD_PIN, active ? MAIN_MLD_ACTIVE : !MAIN_MLD_ACTIVE);
+    // mainMldActive = active;
+    // mainMdlStart = active ? millis() : 0;
 }
 
 void DoorControllerModule::lock(bool active)
 {
-    if (!mainLckActive)
-    {
-        digitalWrite(MAIN_LCK_PIN, MAIN_LCK_ACTIVE);
-        mainLckActive = true;
-        mainLckStart = millis();
-
-        logDebugP("mainLckActive: %i", mainLckActive);
-    }
+    if (lockActive == active)
+        return;
 
     digitalWrite(LOCK_PIN, active ? LOCK_ACTIVE : !LOCK_ACTIVE);
     KoDOR_DoorLockStatus.valueNoSend(active, DPT_Switch);
     lockActive = active;
+
+    logDebugP("lockActive: %i", lockActive);
 }
 
 void DoorControllerModule::updateExtensionOutputs()

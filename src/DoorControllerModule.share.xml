@@ -73,7 +73,7 @@
             </Extension>
           </Static>
           <Dynamic>
-            <Channel Id="%AID%_CH-Basic" Name="BasicChannel" Number="1" Text="Door Controller">
+            <Channel Id="%AID%_CH-Basic" Name="BasicChannel" Number="%PREFIX%" Text="Door Controller" Icon="door-sliding">
               <ParameterBlock Id="%AID%_PB-5" Name="Basic" Text="Grundeinstellung" Icon="cog-outline" HelpContext="Empty">
                 <ParameterSeparator Id="%AID%_PS-nnn" Text="Sicherheitssensoren" UIHint="Headline" />
                 <ParameterRefRef RefId="%AID%_P-%TT%00001_R-%TT%0000101" />
@@ -97,14 +97,14 @@
           </Dynamic>
         </ApplicationProgram>
       </ApplicationPrograms>
-      <!--<Baggages>
-        <Baggage TargetPath="" Name="Help_de.zip" Id="%FILE-HELP-de%">
+      <Baggages>
+      <!--  <Baggage TargetPath="" Name="Help_de.zip" Id="%FILE-HELP-de%">
           <FileInfo TimeInfo="%DATETIME%" />
-        </Baggage>
+        </Baggage>-->
         <Baggage TargetPath="" Name="Icons.zip" Id="%FILE-ICONS%">
           <FileInfo TimeInfo="%DATETIME%" />
         </Baggage>
-      </Baggages>-->
+      </Baggages>
     </Manufacturer>
   </ManufacturerData>
 </KNX>

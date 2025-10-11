@@ -2,6 +2,7 @@
 #include "hardware.h"
 #include "enum-helper.h"
 #include "TCA9555.h"
+#include "DoorSerial.h"
 
 enum class EXT1_A : byte
 {
@@ -117,6 +118,8 @@ class DoorControllerModule : public OpenKNX::Module
     unsigned long mainLckStart = 0;
     unsigned long lastLockRequestMld = 0;
 
+    DoorSerial doorSerial = DoorSerial(MAIN_DOOR_RX_PIN, MAIN_DOOR_TX_PIN);
+
     TCA9555 extTca1 = TCA9555(EXT1_TCA9555_ADR, &EXT_I2C_BUS);
     TCA9555 extTca2 = TCA9555(EXT2_TCA9555_ADR, &EXT_I2C_BUS);
 
@@ -145,6 +148,7 @@ class DoorControllerModule : public OpenKNX::Module
     inline volatile static bool sensorOutsideAirActiveNew = false;
 
     void enableExtInterface();
+    void processDoorSerial();
     void processSensorInsideRadChange();
     void processSensorInsideAirChange();
     void processSensorOutsideRadChange();

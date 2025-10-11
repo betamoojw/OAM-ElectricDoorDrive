@@ -86,7 +86,8 @@
 			"xstring": "cpp",
 			"xtree": "cpp",
 			"xutility": "cpp",
-			"text_encoding": "cpp"
+			"text_encoding": "cpp",
+			"xlocale": "cpp"
 		}
 	}
 }
