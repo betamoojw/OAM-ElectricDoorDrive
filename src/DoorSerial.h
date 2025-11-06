@@ -16,7 +16,6 @@
 
 class DoorSerial {
 private:
-    SoftwareSerial* serialPort;
     uint8_t rxPin;
     uint8_t txPin;
     unsigned long baudRate;
@@ -75,10 +74,8 @@ public:
     inline size_t readBinaryData(uint8_t* buffer, size_t maxLength) { return readMessage(buffer, maxLength); }
     
     // Utility methods
-    bool isConnected() const;
     void flush();
     void clearReceiveBuffer();
-    size_t availableForWrite() const;
     
     // Periodic transmission methods (removed)
     inline void enablePeriodicSend(const String&, unsigned long = 5000) {}
@@ -93,7 +90,6 @@ public:
     uint8_t getTxPin() const { return txPin; }
     uint8_t getRxPin() const { return rxPin; }
     unsigned long getBaudRate() const { return baudRate; }
-    bool isInitialized() const { return (serialPort != nullptr); }
     
     void printStatus();
 };

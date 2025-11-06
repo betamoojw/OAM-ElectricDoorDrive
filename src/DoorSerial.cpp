@@ -4,8 +4,7 @@
 #include <utility>
 
 DoorSerial::DoorSerial(uint8_t rx_pin, uint8_t tx_pin, unsigned long baud)
-    : serialPort(nullptr),
-      rxPin(rx_pin),
+    : rxPin(rx_pin),
       txPin(tx_pin),
       baudRate(baud),
       rxState(RxState::Idle),
@@ -16,16 +15,9 @@ DoorSerial::~DoorSerial() {
 }
 
 bool DoorSerial::begin() {
-    if (serialPort != nullptr) {
-        end();
-    }
-
-    serialPort = new MAIN_DOOR_SERIAL(rxPin, txPin);
-    if (serialPort == nullptr) {
-        return false;
-    }
-
-    serialPort->begin(baudRate, MAIN_DOOR_SERIAL_CONFIG);
+    MAIN_DOOR_SERIAL.setRX(rxPin);
+    MAIN_DOOR_SERIAL.setTX(txPin);
+    MAIN_DOOR_SERIAL.begin(baudRate, MAIN_DOOR_SERIAL_CONFIG);
     delay(10);
 
     resetState();
@@ -40,23 +32,14 @@ bool DoorSerial::begin() {
 }
 
 void DoorSerial::end() {
-    if (serialPort != nullptr) {
-        serialPort->end();
-        delete serialPort;
-        serialPort = nullptr;
-    }
-
+    MAIN_DOOR_SERIAL.end();
     messageQueue.clear();
     resetState();
 }
 
 void DoorSerial::poll() {
-    if (serialPort == nullptr) {
-        return;
-    }
-
-    while (serialPort->available()) {
-        const uint8_t byte = serialPort->read();
+    while (MAIN_DOOR_SERIAL.available()) {
+        const uint8_t byte = MAIN_DOOR_SERIAL.read();
         handleIncomingByte(byte);
     }
 }
@@ -92,7 +75,7 @@ size_t DoorSerial::readMessage(uint8_t* buffer, size_t maxLength) {
 }
 
 bool DoorSerial::sendPayload(const uint8_t* payload, size_t length) {
-    if (serialPort == nullptr || payload == nullptr) {
+    if (payload == nullptr) {
         if (Serial) {
             Serial.println("DoorSerial: Cannot send payload (serial not initialized or payload null)");
         }
@@ -123,8 +106,8 @@ bool DoorSerial::sendPayload(const uint8_t* payload, size_t length) {
     frame.push_back(ETX);
     frame.push_back(checksum);
 
-    const size_t written = serialPort->write(frame.data(), frame.size());
-    serialPort->flush();
+    const size_t written = MAIN_DOOR_SERIAL.write(frame.data(), frame.size());
+    MAIN_DOOR_SERIAL.flush();
 
     // if (Serial) {
     //     Serial.printf("DoorSerial: Sent framed payload (%zu bytes payload, %zu bytes frame)\n", length, frame.size());
@@ -141,30 +124,16 @@ void DoorSerial::setMessageCallback(std::function<void(const std::vector<uint8_t
     messageCallback = std::move(callback);
 }
 
-bool DoorSerial::isConnected() const {
-    return serialPort != nullptr;
-}
-
 void DoorSerial::flush() {
-    if (serialPort != nullptr) {
-        serialPort->flush();
-    }
+    MAIN_DOOR_SERIAL.flush();
 }
 
 void DoorSerial::clearReceiveBuffer() {
-    if (serialPort == nullptr) {
-        return;
-    }
-
-    while (serialPort->available()) {
-        serialPort->read();
+    while (MAIN_DOOR_SERIAL.available()) {
+        MAIN_DOOR_SERIAL.read();
     }
 
     resetState();
-}
-
-size_t DoorSerial::availableForWrite() const {
-    return (serialPort != nullptr) ? serialPort->availableForWrite() : 0;
 }
 
 void DoorSerial::setBaudRate(unsigned long baud) {
@@ -174,9 +143,7 @@ void DoorSerial::setBaudRate(unsigned long baud) {
         Serial.printf("DoorSerial: Baud rate set to %lu\n", baudRate);
     }
 
-    if (serialPort != nullptr) {
-        begin();
-    }
+    begin();
 }
 
 void DoorSerial::setPins(uint8_t rx_pin, uint8_t tx_pin) {
@@ -187,9 +154,7 @@ void DoorSerial::setPins(uint8_t rx_pin, uint8_t tx_pin) {
         Serial.printf("DoorSerial: Pins set to RX:%d, TX:%d\n", rxPin, txPin);
     }
 
-    if (serialPort != nullptr) {
-        begin();
-    }
+    begin();
 }
 
 void DoorSerial::printStatus() {
@@ -198,16 +163,13 @@ void DoorSerial::printStatus() {
     }
 
     Serial.println("=== DoorSerial Status ===");
-    Serial.printf("Initialized: %s\n", isInitialized() ? "Yes" : "No");
     Serial.printf("RX Pin: %d\n", rxPin);
     Serial.printf("TX Pin: %d\n", txPin);
     Serial.printf("Baud Rate: %lu\n", baudRate);
     Serial.printf("Queued Messages: %zu\n", messageQueue.size());
 
-    if (serialPort != nullptr) {
-        Serial.printf("Data Available: %d\n", serialPort->available());
-        Serial.printf("Write Buffer Available: %zu\n", serialPort->availableForWrite());
-    }
+    Serial.printf("Data Available: %d\n", MAIN_DOOR_SERIAL.available());
+    Serial.printf("Write Buffer Available: %zu\n", MAIN_DOOR_SERIAL.availableForWrite());
 
     Serial.println("========================");
 }

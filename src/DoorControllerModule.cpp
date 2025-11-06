@@ -62,10 +62,6 @@ void DoorControllerModule::setup()
     });
 
     doorSerial.begin();
-    if (doorSerial.isConnected())
-        logDebugP("Door serial port is connected");
-    else
-        logErrorP("Door serial port is NOT connected");
 
     logDebugP("Get initial sensor states");
     sensorInsideRadActiveNew = openknx.gpio.digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
