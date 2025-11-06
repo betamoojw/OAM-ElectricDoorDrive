@@ -25,7 +25,7 @@ void DoorSerial::begin() {
     resetState();
     clearReceiveBuffer();
 
-    logDebugP("UART initialized (RX Pin: %d, TX Pin: %d, Baud: %lu)", rxPin, txPin, baudRate);
+    logDebugP("UART initialized (RX Pin: %d, TX Pin: %d, Baud: %lu)", MAIN_DOOR_RX_PIN, MAIN_DOOR_TX_PIN, MAIN_DOOR_SERIAL_BAUD);
 }
 
 void DoorSerial::end() {
@@ -130,9 +130,9 @@ void DoorSerial::clearReceiveBuffer() {
 void DoorSerial::printStatus() {
     logDebugP("DoorSerial Status:");
     logIndentUp();
-    logDebugP("RX Pin: %d", rxPin);
-    logDebugP("TX Pin: %d", txPin);
-    logDebugP("Baud Rate: %lu", baudRate);
+    logDebugP("RX Pin: %d", MAIN_DOOR_RX_PIN);
+    logDebugP("TX Pin: %d", MAIN_DOOR_TX_PIN);
+    logDebugP("Baud Rate: %lu", MAIN_DOOR_SERIAL_BAUD);
     logDebugP("Queued Messages: %zu", messageQueue.size());
 
     logDebugP("Data Available: %d", MAIN_DOOR_SERIAL.available());

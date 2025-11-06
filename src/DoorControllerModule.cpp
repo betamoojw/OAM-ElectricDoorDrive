@@ -779,7 +779,7 @@ bool DoorControllerModule::processCommand(const std::string cmd, bool diagnoseKo
         return true;
     }
 
-    if (cmd.length() == 10 && cmd.substr(0, 9) == "dc status")
+    if (cmd.length() == 9 && cmd.substr(0, 9) == "dc status")
     {
         doorSerial.printStatus();
         return true;

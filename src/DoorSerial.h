@@ -14,10 +14,6 @@
 
 class DoorSerial {
 private:
-    uint8_t rxPin;
-    uint8_t txPin;
-    unsigned long baudRate;
-
     enum class RxState : uint8_t {
         Idle,
         AwaitStx,
