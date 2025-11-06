@@ -1,9 +1,7 @@
-#ifndef DOOR_SERIAL_H
-#define DOOR_SERIAL_H
-
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include "hardware.h"
+#include "OpenKNX.h"
 
 #include <deque>
 #include <functional>
@@ -54,8 +52,10 @@ public:
     // Destructor
     ~DoorSerial();
     
+    std::string logPrefix();
+
     // Initialization
-    bool begin();
+    void begin();
     void end();
 
     // Processing
@@ -84,5 +84,3 @@ public:
     
     void printStatus();
 };
-
-#endif // DOOR_SERIAL_H

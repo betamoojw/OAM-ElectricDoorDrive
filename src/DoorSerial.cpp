@@ -11,7 +11,12 @@ DoorSerial::~DoorSerial() {
     end();
 }
 
-bool DoorSerial::begin() {
+std::string DoorSerial::logPrefix()
+{
+    return "DoorSerial";
+}
+
+void DoorSerial::begin() {
     MAIN_DOOR_SERIAL.setRX(MAIN_DOOR_RX_PIN);
     MAIN_DOOR_SERIAL.setTX(MAIN_DOOR_TX_PIN);
     MAIN_DOOR_SERIAL.begin(MAIN_DOOR_SERIAL_BAUD, MAIN_DOOR_SERIAL_CONFIG);
@@ -20,12 +25,7 @@ bool DoorSerial::begin() {
     resetState();
     clearReceiveBuffer();
 
-    if (Serial) {
-        Serial.println("DoorSerial: UART initialized successfully");
-        Serial.printf("DoorSerial: RX Pin: %d, TX Pin: %d, Baud: %lu\n", rxPin, txPin, baudRate);
-    }
-
-    return true;
+    logDebugP("UART initialized (RX Pin: %d, TX Pin: %d, Baud: %lu)", rxPin, txPin, baudRate);
 }
 
 void DoorSerial::end() {
@@ -58,9 +58,7 @@ size_t DoorSerial::readMessage(uint8_t* buffer, size_t maxLength) {
 
     const std::vector<uint8_t>& next = messageQueue.front();
     if (next.size() > maxLength) {
-        if (Serial) {
-            Serial.printf("DoorSerial: Message too large for buffer (%zu > %zu)\n", next.size(), maxLength);
-        }
+        logDebugP("DoorSerial: Message too large for buffer (%zu > %zu)", next.size(), maxLength);
         return 0;
     }
 
@@ -73,9 +71,7 @@ size_t DoorSerial::readMessage(uint8_t* buffer, size_t maxLength) {
 
 bool DoorSerial::sendPayload(const uint8_t* payload, size_t length) {
     if (payload == nullptr) {
-        if (Serial) {
-            Serial.println("DoorSerial: Cannot send payload (serial not initialized or payload null)");
-        }
+        logDebugP("DoorSerial: Cannot send payload (serial not initialized or payload null)");
         return false;
     }
 
@@ -106,9 +102,7 @@ bool DoorSerial::sendPayload(const uint8_t* payload, size_t length) {
     const size_t written = MAIN_DOOR_SERIAL.write(frame.data(), frame.size());
     MAIN_DOOR_SERIAL.flush();
 
-    // if (Serial) {
-    //     Serial.printf("DoorSerial: Sent framed payload (%zu bytes payload, %zu bytes frame)\n", length, frame.size());
-    // }
+    // logDebugP("DoorSerial: Sent framed payload (%zu bytes payload, %zu bytes frame)\n", length, frame.size());
 
     return written == frame.size();
 }
@@ -134,20 +128,16 @@ void DoorSerial::clearReceiveBuffer() {
 }
 
 void DoorSerial::printStatus() {
-    if (!Serial) {
-        return;
-    }
+    logDebugP("DoorSerial Status:");
+    logIndentUp();
+    logDebugP("RX Pin: %d", rxPin);
+    logDebugP("TX Pin: %d", txPin);
+    logDebugP("Baud Rate: %lu", baudRate);
+    logDebugP("Queued Messages: %zu", messageQueue.size());
 
-    Serial.println("=== DoorSerial Status ===");
-    Serial.printf("RX Pin: %d\n", rxPin);
-    Serial.printf("TX Pin: %d\n", txPin);
-    Serial.printf("Baud Rate: %lu\n", baudRate);
-    Serial.printf("Queued Messages: %zu\n", messageQueue.size());
-
-    Serial.printf("Data Available: %d\n", MAIN_DOOR_SERIAL.available());
-    Serial.printf("Write Buffer Available: %zu\n", MAIN_DOOR_SERIAL.availableForWrite());
-
-    Serial.println("========================");
+    logDebugP("Data Available: %d", MAIN_DOOR_SERIAL.available());
+    logDebugP("Write Buffer Available: %zu", MAIN_DOOR_SERIAL.availableForWrite());
+    logIndentDown();
 }
 
 void DoorSerial::resetState() {
@@ -179,9 +169,7 @@ void DoorSerial::handleIncomingByte(uint8_t byte) {
                 rxState = RxState::AfterDle;
             } else {
                 if (rxBuffer.size() >= MAX_MESSAGE_LENGTH) {
-                    if (Serial) {
-                        Serial.println("DoorSerial: Discarding message (payload too long)");
-                    }
+                    logDebugP("DoorSerial: Discarding message (payload too long)");
                     resetState();
                     break;
                 }
@@ -193,9 +181,7 @@ void DoorSerial::handleIncomingByte(uint8_t byte) {
         case RxState::AfterDle:
             if (byte == DLE) {
                 if (rxBuffer.size() >= MAX_MESSAGE_LENGTH) {
-                    if (Serial) {
-                        Serial.println("DoorSerial: Discarding message (payload too long)");
-                    }
+                    logDebugP("DoorSerial: Discarding message (payload too long)");
                     resetState();
                     break;
                 }
@@ -206,9 +192,7 @@ void DoorSerial::handleIncomingByte(uint8_t byte) {
             } else if (byte == ETX) {
                 rxState = RxState::AwaitChecksum;
             } else {
-                if (Serial) {
-                    Serial.printf("DoorSerial: Unexpected escape sequence 0x%02X\n", byte);
-                }
+                logDebugP("DoorSerial: Unexpected escape sequence 0x%02X", byte);
                 resetState();
             }
             break;
@@ -216,8 +200,8 @@ void DoorSerial::handleIncomingByte(uint8_t byte) {
         case RxState::AwaitChecksum:
             if (byte == computedChecksum) {
                 enqueueMessage(rxBuffer);
-            } else if (Serial) {
-                Serial.printf("DoorSerial: Checksum mismatch (expected 0x%02X, received 0x%02X)\n", computedChecksum, byte);
+            } else {
+                logDebugP("DoorSerial: Checksum mismatch (expected 0x%02X, received 0x%02X)", computedChecksum, byte);
             }
             resetState();
             break;
