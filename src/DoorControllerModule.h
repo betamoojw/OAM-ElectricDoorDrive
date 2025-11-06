@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <cstdint>
 #include "OpenKNX.h"
 #include "hardware.h"
@@ -6,13 +7,25 @@
 
 #define DOOR_SEND_INTERVAL 60
 
-constexpr uint8_t PAYLOAD_INIT1[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x06};
-constexpr uint8_t PAYLOAD_INIT2[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x05};
-constexpr uint8_t PAYLOAD_INIT3[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x04};
-constexpr uint8_t PAYLOAD_OPEN[]    = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x04};
-constexpr uint8_t PAYLOAD_CLOSING[] = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x01};
-constexpr uint8_t PAYLOAD_CLOSED[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x03};
-constexpr uint8_t PAYLOAD_OPENING[] = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x00};
+constexpr uint8_t PAYLOAD_INIT1[]         = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x06};
+constexpr uint8_t PAYLOAD_INIT2[]         = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x05};
+constexpr uint8_t PAYLOAD_INIT3[]         = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x04};
+constexpr uint8_t PAYLOAD_OPEN[]          = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x04};
+constexpr uint8_t PAYLOAD_CLOSING[]       = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x01};
+constexpr uint8_t PAYLOAD_CLOSING_PRE1[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x12, 0x04}; // radar?
+constexpr uint8_t PAYLOAD_CLOSING_PRE2[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x14, 0x04}; // infrared?
+constexpr uint8_t PAYLOAD_CLOSED[]        = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x03};
+constexpr uint8_t PAYLOAD_OPENING[]       = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x00};
+constexpr uint8_t PAYLOAD_OPENING_PRE1[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x12, 0x03};
+
+constexpr size_t DOOR_PAYLOAD_SIZE = sizeof(PAYLOAD_INIT1);
+
+struct DoorCommandDefinition
+{
+  const uint8_t *finalPayload;
+  size_t prefixCount;
+  const uint8_t *const *prefixPayloads;
+};
 
 class DoorControllerModule : public OpenKNX::Module
 {
@@ -81,10 +94,14 @@ class DoorControllerModule : public OpenKNX::Module
     unsigned long lastLockRequestMld = 0;
 
     uint32_t lastDoorSent = 0;
-    uint8_t doorDataSending[8] = {};
-    uint8_t lastDataDoorSent[8] = {};
-    uint8_t lastDataDoorReceived[8] = {};
+  uint8_t doorDataSending[DOOR_PAYLOAD_SIZE] = {};
+  uint8_t lastDataDoorSent[DOOR_PAYLOAD_SIZE] = {};
+  uint8_t lastDataDoorReceived[DOOR_PAYLOAD_SIZE] = {};
     bool doorDebugOutput = false;
+
+  const uint8_t *const *activeDoorPrefixes = nullptr;
+  size_t activeDoorPrefixCount = 0;
+  size_t activeDoorPrefixIndex = 0;
 
     DoorSerial doorSerial = DoorSerial();
 
@@ -146,6 +163,8 @@ class DoorControllerModule : public OpenKNX::Module
     void updateExtensionOutputs();
     void sendMainMld(bool active);
     void lock(bool active);
+
+  void setDoorCommand(const DoorCommandDefinition &definition);
 
     static void interruptSensorInsideRadChange();
     static void interruptSensorInsideAirChange();

@@ -3,6 +3,52 @@
 #include <cstring>
 #include <DoorControllerModule.h>
 
+namespace
+{
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_INIT1), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_INIT2), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_INIT3), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_OPEN), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_CLOSING), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_CLOSED), "Door payload size mismatch");
+static_assert(DOOR_PAYLOAD_SIZE == sizeof(PAYLOAD_OPENING), "Door payload size mismatch");
+
+template <typename T, size_t N>
+constexpr size_t arrayCount(const T (&)[N])
+{
+    return N;
+}
+
+// Define prefix message sequences here. Each entry is transmitted once (in order)
+// before the final payload is sent continuously again.
+constexpr const uint8_t *PREFIX_CLOSING[] = {PAYLOAD_CLOSING_PRE1, PAYLOAD_CLOSING_PRE2};
+constexpr const uint8_t *PREFIX_OPENING[] = {PAYLOAD_OPENING_PRE1};
+
+constexpr DoorCommandDefinition COMMAND_INIT1{PAYLOAD_INIT1, 0u, nullptr};
+constexpr DoorCommandDefinition COMMAND_INIT2{PAYLOAD_INIT2, 0u, nullptr};
+constexpr DoorCommandDefinition COMMAND_INIT3{PAYLOAD_INIT3, 0u, nullptr};
+constexpr DoorCommandDefinition COMMAND_OPEN{PAYLOAD_OPEN, 0u, nullptr};
+constexpr DoorCommandDefinition COMMAND_CLOSING{PAYLOAD_CLOSING, arrayCount(PREFIX_CLOSING), PREFIX_CLOSING};
+constexpr DoorCommandDefinition COMMAND_CLOSED{PAYLOAD_CLOSED, 0u, nullptr};
+constexpr DoorCommandDefinition COMMAND_OPENING{PAYLOAD_OPENING, arrayCount(PREFIX_OPENING), PREFIX_OPENING};
+
+struct CommandLookupEntry
+{
+    const char *token;
+    const DoorCommandDefinition *definition;
+};
+
+constexpr CommandLookupEntry COMMAND_LOOKUP[] = {
+    {"it1", &COMMAND_INIT1},
+    {"it2", &COMMAND_INIT2},
+    {"it3", &COMMAND_INIT3},
+    {"opg", &COMMAND_OPENING},
+    {"opn", &COMMAND_OPEN},
+    {"clg", &COMMAND_CLOSING},
+    {"cls", &COMMAND_CLOSED},
+};
+} // namespace
+
 const std::string DoorControllerModule::name()
 {
     return "DoorController";
@@ -230,16 +276,24 @@ void DoorControllerModule::processDoorSerial()
     if (lastDoorSent > 0 && delayCheckMillis(lastDoorSent, DOOR_SEND_INTERVAL))
     {
         lastDoorSent = millis();
-        doorSerial.sendPayload(doorDataSending, sizeof(doorDataSending));
+        const uint8_t *payloadToSend = doorDataSending;
+
+        if (activeDoorPrefixes != nullptr && activeDoorPrefixIndex < activeDoorPrefixCount)
+        {
+            payloadToSend = activeDoorPrefixes[activeDoorPrefixIndex];
+            ++activeDoorPrefixIndex;
+        }
+
+        doorSerial.sendPayload(payloadToSend, DOOR_PAYLOAD_SIZE);
 
         if (doorDebugOutput ||
-            memcmp(doorDataSending, lastDataDoorSent, sizeof(doorDataSending)) != 0)
+            memcmp(payloadToSend, lastDataDoorSent, DOOR_PAYLOAD_SIZE) != 0)
         {
-            memcpy(lastDataDoorSent, doorDataSending, sizeof(doorDataSending));
+            memcpy(lastDataDoorSent, payloadToSend, DOOR_PAYLOAD_SIZE);
 
             logDebugP("Door SEND command changed:");
             logIndentUp();
-            logHexDebugP(doorDataSending, sizeof(doorDataSending));
+            logHexDebugP(lastDataDoorSent, DOOR_PAYLOAD_SIZE);
             logIndentDown();
         }
     }
@@ -605,6 +659,21 @@ void DoorControllerModule::lock(bool active)
     logDebugP("lockActive: %i", lockActive);
 }
 
+void DoorControllerModule::setDoorCommand(const DoorCommandDefinition &definition)
+{
+    activeDoorPrefixes = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixPayloads : nullptr;
+    activeDoorPrefixCount = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixCount : 0;
+    activeDoorPrefixIndex = 0;
+
+    if (definition.finalPayload != nullptr)
+        memcpy(doorDataSending, definition.finalPayload, DOOR_PAYLOAD_SIZE);
+    else
+        memset(doorDataSending, 0, DOOR_PAYLOAD_SIZE);
+
+    memset(lastDataDoorSent, 0, sizeof(lastDataDoorSent));
+    lastDoorSent = 1; // trigger immediate send on next loop iteration
+}
+
 void DoorControllerModule::updateExtensionOutputs()
 {
     if (lastExtMainPwr != mainPwrActive)
@@ -754,28 +823,27 @@ bool DoorControllerModule::processCommand(const std::string cmd, bool diagnoseKo
     if (cmd.substr(0, 2) != "dc")
         return false;
 
-    if (cmd.length() == 11 && cmd.substr(0, 8) == "dc send ")
+    if (cmd.length() > 8 && cmd.compare(0, 8, "dc send ") == 0)
     {
-        if (cmd.substr(8, 3) == "it1")
-            memcpy(doorDataSending, PAYLOAD_INIT1, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "it2")
-            memcpy(doorDataSending, PAYLOAD_INIT2, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "it3")
-            memcpy(doorDataSending, PAYLOAD_INIT3, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "opg")
-            memcpy(doorDataSending, PAYLOAD_OPENING, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "opn")
-            memcpy(doorDataSending, PAYLOAD_OPEN, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "clg")
-            memcpy(doorDataSending, PAYLOAD_CLOSING, sizeof(doorDataSending));
-        else if (cmd.substr(8, 3) == "cls")
-            memcpy(doorDataSending, PAYLOAD_CLOSED, sizeof(doorDataSending));
-        else
+        std::string token = cmd.substr(8);
+
+        const DoorCommandDefinition *definition = nullptr;
+        for (const auto &entry : COMMAND_LOOKUP)
+        {
+            if (token == entry.token)
+            {
+                definition = entry.definition;
+                break;
+            }
+        }
+
+        if (definition == nullptr)
+        {
+            logInfoP("dc send command with bad args");
             return false;
+        }
 
-        if (lastDoorSent == 0)
-            lastDoorSent = 1; // send immediately in next loop
-
+        setDoorCommand(*definition);
         return true;
     }
 
