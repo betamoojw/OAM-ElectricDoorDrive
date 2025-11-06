@@ -1,5 +1,6 @@
 #include "Wire.h"
 #include <Arduino.h>
+#include <cstring>
 #include <DoorControllerModule.h>
 
 const std::string DoorControllerModule::name()
@@ -18,30 +19,59 @@ void DoorControllerModule::setup()
     logIndentUp();
 
     logDebugP("Setup PIN modes");
-    pinMode(MAIN_PWR_PIN, INPUT);
-    pinMode(MAIN_DOOR_MASTER_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_DOOR_MASTER_PIN, !MAIN_DOOR_MASTER_ACTIVE);
-    pinMode(MAIN_DOOR_ENABLE_PIN, OUTPUT_4MA);
-    digitalWrite(MAIN_DOOR_ENABLE_PIN, MAIN_DOOR_ENABLE_ACTIVE);
+    openknx.gpio.pinMode(MAIN_DOOR_ENABLE_PIN, OUTPUT, true, MAIN_DOOR_ENABLE_ACTIVE);
+    openknx.gpio.pinMode(MAIN_DOOR_MASTER_PIN, OUTPUT, true, !MAIN_DOOR_MASTER_ACTIVE);
+    openknx.gpio.pinMode(MAIN_PWR_PIN, INPUT);
+    openknx.gpio.pinMode(LOCK_PIN, OUTPUT, true, !LOCK_ACTIVE);
+    openknx.gpio.pinMode(SENSOR_TST_PIN, OUTPUT, true, !SENSOR_TST_ACTIVE);
+    openknx.gpio.pinMode(SENSOR_INSIDE_RAD_PIN, INPUT_PULLUP);
+    openknx.gpio.pinMode(SENSOR_INSIDE_AIR_PIN, INPUT_PULLUP);
+    openknx.gpio.pinMode(SENSOR_OUTSIDE_RAD_PIN, INPUT_PULLUP);
+    openknx.gpio.pinMode(SENSOR_OUTSIDE_AIR_PIN, INPUT_PULLUP);
+
+    doorSerial.setMessageCallback([this](const std::vector<uint8_t>& payload) {
+        // Only output the received command if it differs from the last one we saw.
+        if (doorDebugOutput ||
+            payload.size() == sizeof(lastDataDoorReceived))
+        {
+            if (memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
+            {
+                memcpy(lastDataDoorReceived, payload.data(), sizeof(lastDataDoorReceived));
+                logDebugP("Door RECEIVED command changed:");
+                logIndentUp();
+                logHexDebugP(lastDataDoorReceived, sizeof(lastDataDoorReceived));
+                logIndentDown();
+            }
+        }
+        else
+        {
+            // Different length -> treat as changed: store what we can and print payload
+            size_t copyLen = std::min(payload.size(), sizeof(lastDataDoorReceived));
+            memset(lastDataDoorReceived, 0, sizeof(lastDataDoorReceived));
+            if (copyLen > 0)
+                memcpy(lastDataDoorReceived, payload.data(), copyLen);
+
+            logDebugP("Door RECEIVED command (len %u) differs from stored one:", static_cast<unsigned>(payload.size()));
+            if (!payload.empty())
+            {
+                logIndentUp();
+                logHexDebugP(payload.data(), payload.size());
+                logIndentDown();
+            }
+        }
+    });
 
     doorSerial.begin();
     if (doorSerial.isConnected())
         logDebugP("Door serial port is connected");
-    
-    pinMode(LOCK_PIN, OUTPUT_4MA);
-    digitalWrite(LOCK_PIN, !LOCK_ACTIVE);
-    pinMode(SENSOR_TST_PIN, OUTPUT_4MA);
-    digitalWrite(SENSOR_TST_PIN, !SENSOR_TST_ACTIVE);
-    pinMode(SENSOR_INSIDE_RAD_PIN, INPUT_PULLUP);
-    pinMode(SENSOR_INSIDE_AIR_PIN, INPUT_PULLUP);
-    pinMode(SENSOR_OUTSIDE_RAD_PIN, INPUT_PULLUP);
-    pinMode(SENSOR_OUTSIDE_AIR_PIN, INPUT_PULLUP);
+    else
+        logErrorP("Door serial port is NOT connected");
 
     logDebugP("Get initial sensor states");
-    sensorInsideRadActiveNew = digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
-    sensorInsideAirActiveNew = digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
-    sensorOutsideRadActiveNew = digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
-    sensorOutsideAirActiveNew = digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorInsideRadActiveNew = openknx.gpio.digitalRead(SENSOR_INSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorInsideAirActiveNew = openknx.gpio.digitalRead(SENSOR_INSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
+    sensorOutsideRadActiveNew = openknx.gpio.digitalRead(SENSOR_OUTSIDE_RAD_PIN) == SENSOR_RAD_ACTIVE;
+    sensorOutsideAirActiveNew = openknx.gpio.digitalRead(SENSOR_OUTSIDE_AIR_PIN) == SENSOR_AIR_ACTIVE;
 
     logDebugP("Attach interrupts");
     attachInterrupt(digitalPinToInterrupt(SENSOR_INSIDE_RAD_PIN), DoorControllerModule::interruptSensorInsideRadChange, CHANGE);
@@ -144,37 +174,45 @@ void DoorControllerModule::enableExtInterface()
 {
     logDebugP("Enable EXT interface");
 
-    EXT_I2C_BUS.setSDA(EXT_I2C_SDA);
-    EXT_I2C_BUS.setSCL(EXT_I2C_SCL);
-    EXT_I2C_BUS.begin();
-    EXT_I2C_BUS.setClock(100000);
+    openknx.gpio.pinMode(EXT_SWITCH_OUT_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SWITCH_INS_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_DOOR_OPN_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_DOOR_CLD_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_DOOR_MODE_AUT_PIN, OUTPUT, true, HIGH);
+    openknx.gpio.pinMode(EXT_DOOR_MODE_MAN_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_DOOR_MODE_OPN_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_DOOR_MODE_CLD_PIN, OUTPUT, true, LOW);
 
-    if (extTca1.begin() &&
-        extTca2.begin())
-    {
-        for (size_t i = 0; i < 16; i++)
-        {
-            extTca1.pinMode1(i, OUTPUT);
+    openknx.gpio.pinMode(EXT_SENSOR_INSIDE_AIR_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_INSIDE_RAD_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_LCK_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_TST_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_NSK_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_HSK_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_MLD_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_MAIN_PWR_PIN, OUTPUT, true, LOW);
 
-            // if (i == EXT2_KNX_PRG_SWITCH_PIN)
-            // {
-            //     extTca2.pinMode(i, INPUT_PULLUP);
-            // }
-            // else
-                extTca2.pinMode1(i, OUTPUT);
-        }
+    openknx.gpio.pinMode(EXT_SENSOR_NSK2_TST_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_NSK2_AIR_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_NSK1_TST_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_NSK1_AIR_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_OUTSIDE_TST_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_OUTSIDE_AIR_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_OUTSIDE_RAD_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_SENSOR_INSIDE_TST_PIN, OUTPUT, true, LOW);
 
-        logDebugP("TCA9555 setup done with address %u and %u", extTca1.getAddress(), extTca2.getAddress());
-    }
-    else
-        logDebugP("TCA9555 not found at address %u and %u", extTca1.getAddress(), extTca2.getAddress());
-
-    ext2B = ext2B | EXT2_B::POWER_RUN;
+    openknx.gpio.pinMode(EXT_KNX_PRG_SWITCH_PIN, INPUT_PULLUP);
+    openknx.gpio.pinMode(EXT_KNX_PRG_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_KNX_INF_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_POWER_RUN_PIN, OUTPUT, true, HIGH);
+    openknx.gpio.pinMode(EXT_LOCK_ACT_PIN, OUTPUT, true, LOW);
+    openknx.gpio.pinMode(EXT_LOCK_RQT_PIN, OUTPUT, true, LOW);
 }
 
 void DoorControllerModule::loop()
 {
     processDoorSerial();
+    return;
 
     processSensorInsideRadChange();
     processSensorInsideAirChange();
@@ -191,11 +229,35 @@ void DoorControllerModule::loop()
 
 void DoorControllerModule::processDoorSerial()
 {
-    uint8_t data[32];
-    size_t dataLength = doorSerial.readBinaryData(data, 32);
+    doorSerial.poll();
 
-    logDebugP("DoorSerial: Read data");
-    logHexDebugP(data, dataLength);
+    if (lastDoorSent > 0 && delayCheckMillis(lastDoorSent, DOOR_SEND_INTERVAL))
+    {
+        lastDoorSent = millis();
+        doorSerial.sendPayload(doorDataSending, sizeof(doorDataSending));
+
+        if (doorDebugOutput ||
+            memcmp(doorDataSending, lastDataDoorSent, sizeof(doorDataSending)) != 0)
+        {
+            memcpy(lastDataDoorSent, doorDataSending, sizeof(doorDataSending));
+
+            logDebugP("Door SEND command changed:");
+            logIndentUp();
+            logHexDebugP(doorDataSending, sizeof(doorDataSending));
+            logIndentDown();
+        }
+    }
+
+    // uint8_t payload[DoorSerial::MaxMessageLength];
+
+    // while (doorSerial.hasData())
+    // {
+    //     if (doorSerial.readBinaryData(payload, sizeof(payload)) == 0)
+    //     {
+    //         break;
+    //     }
+    //     // TODO: interpret door payload
+    // }
 }
 
 void DoorControllerModule::processSensorInsideRadChange()
@@ -549,149 +611,192 @@ void DoorControllerModule::lock(bool active)
 
 void DoorControllerModule::updateExtensionOutputs()
 {
-    if (!extTca1.isConnected() ||
-        !extTca2.isConnected())
-        return;
-
-    if (mainPwrActive)
-        ext1B = ext1B | EXT1_B::MAIN_PWR;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_PWR;
-
-    if (mainMldActive)
-        ext1B = ext1B | EXT1_B::MAIN_MLD;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_MLD;
-
-    if (mainHskActive)
-        ext1B = ext1B | EXT1_B::MAIN_HSK;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_HSK;
-
-    if (mainNskActive)
-        ext1B = ext1B | EXT1_B::MAIN_NSK;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_NSK;
-
-    if (mainTstActive)
-        ext1B = ext1B | EXT1_B::MAIN_TST;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_TST;
-
-    if (mainLckActive)
-        ext1B = ext1B | EXT1_B::MAIN_LCK;
-    else
-        ext1B = ext1B & ~EXT1_B::MAIN_LCK;
-
-    if (doorState == DoorState::CLOSED)
-        ext1A = ext1A | EXT1_A::DOOR_CLD;
-    else
-        ext1A = ext1A & ~EXT1_A::DOOR_CLD;
-
-    if (doorState == DoorState::OPEN)
-        ext1A = ext1A | EXT1_A::DOOR_OPN;
-    else
-        ext1A = ext1A & ~EXT1_A::DOOR_OPN;
-
-    if (sensorInsideRadActive)
-        ext1B = ext1B | EXT1_B::SENSOR_INSIDE_RAD;
-    else
-        ext1B = ext1B & ~EXT1_B::SENSOR_INSIDE_RAD;
-
-    if (sensorInsideAirActive)
-        ext1B = ext1B | EXT1_B::SENSOR_INSIDE_AIR;
-    else
-        ext1B = ext1B & ~EXT1_B::SENSOR_INSIDE_AIR;
-
-    if (sensorTstActive)
-        ext2A = ext2A | EXT2_A::SENSOR_INSIDE_TST;
-    else
-        ext2A = ext2A & ~EXT2_A::SENSOR_INSIDE_TST;
-
-    if (sensorOutsideRadActive)
-        ext2A = ext2A | EXT2_A::SENSOR_OUTSIDE_RAD;
-    else
-        ext2A = ext2A & ~EXT2_A::SENSOR_OUTSIDE_RAD;
-
-    if (sensorOutsideAirActive)
-        ext2A = ext2A | EXT2_A::SENSOR_OUTSIDE_AIR;
-    else
-        ext2A = ext2A & ~EXT2_A::SENSOR_OUTSIDE_AIR;
-
-    if (sensorTstActive)
-        ext2A = ext2A | EXT2_A::SENSOR_OUTSIDE_TST;
-    else
-        ext2A = ext2A & ~EXT2_A::SENSOR_OUTSIDE_TST;
-
-    ext1A = ext1A & ~EXT1_A::DOOR_MODE_CLD;
-    ext1A = ext1A & ~EXT1_A::DOOR_MODE_OPN;
-    ext1A = ext1A & ~EXT1_A::DOOR_MODE_MAN;
-    ext1A = ext1A & ~EXT1_A::DOOR_MODE_AUT;
-    switch (doorMode)
+    if (lastExtMainPwr != mainPwrActive)
     {
-        case DoorMode::ALWAYS_CLOSED:
-            ext1A = ext1A | EXT1_A::DOOR_MODE_CLD;
-            break;
-        case DoorMode::ALWAYS_OPEN:
-            ext1A = ext1A | EXT1_A::DOOR_MODE_OPN;
-            break;
-        case DoorMode::MANUAL:
-            ext1A = ext1A | EXT1_A::DOOR_MODE_MAN;
-            break;
-        case DoorMode::AUTOMATIC:
-            ext1A = ext1A | EXT1_A::DOOR_MODE_AUT;
-            break;
+        openknx.gpio.digitalWrite(EXT_MAIN_PWR_PIN, mainPwrActive ? HIGH : LOW);
+        lastExtMainPwr = mainPwrActive;
     }
 
-    if (lockRequested)
-        ext2B = ext2B | EXT2_B::LOCK_RQT;
-    else
-        ext2B = ext2B & ~EXT2_B::LOCK_RQT;
-
-    if (lockActive)
-        ext2B = ext2B | EXT2_B::LOCK_ACT;
-    else
-        ext2B = ext2B & ~EXT2_B::LOCK_ACT;
-
-    // if (millis() - extProgSwitchLastTrigger >= EXT2_KNX_PRG_SWITCH_DEBOUNCE &&
-    //     extTca2.read1(EXT2_KNX_PRG_SWITCH_PIN) == EXT2_KNX_PRG_SWITCH_ACTIVE)
-    // {
-    //     extProgSwitchLastTrigger = millis();
-    //     knx.toggleProgMode();
-    // }
-
-    if (knx.progMode())
-        ext2B = ext2B | EXT2_B::KNX_PRG;
-    else
-        ext2B = ext2B & ~EXT2_B::KNX_PRG;
-
-    if (ext1ALastSent != ext1A)
+    if (lastExtMainMld != mainMldActive)
     {
-        ext1ALastSent = ext1A;
-        extTca1.write8(0, (u_int8_t)ext1A);
-        logDebugP("ext1A: %d", (u_int8_t)ext1A);
+        openknx.gpio.digitalWrite(EXT_MAIN_MLD_PIN, mainMldActive ? HIGH : LOW);
+        lastExtMainMld = mainMldActive;
     }
 
-    if (ext1BLastSent != ext1B)
+    if (lastExtMainHsk != mainHskActive)
     {
-        ext1BLastSent = ext1B;
-        extTca1.write8(1, (u_int8_t)ext1B);
-        logDebugP("ext1B: %d", (u_int8_t)ext1B);
+        openknx.gpio.digitalWrite(EXT_MAIN_HSK_PIN, mainHskActive ? HIGH : LOW);
+        lastExtMainHsk = mainHskActive;
     }
 
-    if (ext2ALastSent != ext2A)
+    if (lastExtMainNsk != mainNskActive)
     {
-        ext2ALastSent = ext2A;
-        extTca2.write8(0, (u_int8_t)ext2A);
-        logDebugP("ext2A: %d", (u_int8_t)ext2A);
+        openknx.gpio.digitalWrite(EXT_MAIN_NSK_PIN, mainNskActive ? HIGH : LOW);
+        lastExtMainNsk = mainNskActive;
     }
 
-    if (ext2BLastSent != ext2B)
+    if (lastExtMainTst != mainTstActive)
     {
-        ext2BLastSent = ext2B;
-        extTca2.write8(1, (u_int8_t)ext2B);
-        logDebugP("ext2B: %d", (u_int8_t)ext2B);
+        openknx.gpio.digitalWrite(EXT_MAIN_TST_PIN, mainTstActive ? HIGH : LOW);
+        lastExtMainTst = mainTstActive;
     }
+
+    if (lastExtMainNsk != mainNskActive)
+    {
+        openknx.gpio.digitalWrite(EXT_MAIN_NSK_PIN, mainNskActive ? HIGH : LOW);
+        lastExtMainNsk = mainNskActive;
+    }
+
+    if (lastExtMainTst != mainTstActive)
+    {
+        openknx.gpio.digitalWrite(EXT_MAIN_TST_PIN, mainTstActive ? HIGH : LOW);
+        lastExtMainTst = mainTstActive;
+    }
+
+    if (lastExtMainLck != mainLckActive)
+    {
+        openknx.gpio.digitalWrite(EXT_MAIN_LCK_PIN, mainLckActive ? HIGH : LOW);
+        lastExtMainLck = mainLckActive;
+    }
+
+    bool doorClosed = doorState == DoorState::CLOSED;
+    if (lastExtDoorCld != doorClosed)
+    {
+        openknx.gpio.digitalWrite(EXT_DOOR_CLD_PIN, doorClosed ? HIGH : LOW);
+        lastExtDoorCld = doorClosed;
+    }
+
+    bool doorOpen = doorState == DoorState::OPEN;
+    if (lastExtDoorOpn != doorOpen)
+    {
+        openknx.gpio.digitalWrite(EXT_DOOR_OPN_PIN, doorOpen ? HIGH : LOW);
+        lastExtDoorOpn = doorOpen;
+    }
+
+    if (lastExtSensorInsideRad != sensorInsideRadActive)
+    {
+        openknx.gpio.digitalWrite(EXT_SENSOR_INSIDE_RAD_PIN, sensorInsideRadActive ? HIGH : LOW);
+        lastExtSensorInsideRad = sensorInsideRadActive;
+    }
+
+    if (lastExtSensorInsideAir != sensorInsideAirActive)
+    {
+        openknx.gpio.digitalWrite(EXT_SENSOR_INSIDE_AIR_PIN, sensorInsideAirActive ? HIGH : LOW);
+        lastExtSensorInsideAir = sensorInsideAirActive;
+    }
+
+    if (lastExtSensorTst != sensorTstActive)
+    {
+        openknx.gpio.digitalWrite(EXT_SENSOR_OUTSIDE_TST_PIN, sensorTstActive ? HIGH : LOW);
+        openknx.gpio.digitalWrite(EXT_SENSOR_INSIDE_TST_PIN, sensorTstActive ? HIGH : LOW);
+        lastExtSensorTst = sensorTstActive;
+    }
+
+    if (lastExtSensorOutsideRad != sensorOutsideRadActive)
+    {
+        openknx.gpio.digitalWrite(EXT_SENSOR_OUTSIDE_RAD_PIN, sensorOutsideRadActive ? HIGH : LOW);
+        lastExtSensorOutsideRad = sensorOutsideRadActive;
+    }
+
+    if (lastExtSensorOutsideAir != sensorOutsideAirActive)
+    {
+        openknx.gpio.digitalWrite(EXT_SENSOR_OUTSIDE_AIR_PIN, sensorOutsideAirActive ? HIGH : LOW);
+        lastExtSensorOutsideAir = sensorOutsideAirActive;
+    }
+    
+    if (lastExtDoorMode != doorMode)
+    {
+        openknx.gpio.digitalWrite(EXT_DOOR_MODE_AUT_PIN, doorMode == DoorMode::AUTOMATIC ? HIGH : LOW);
+        openknx.gpio.digitalWrite(EXT_DOOR_MODE_MAN_PIN, doorMode == DoorMode::MANUAL ? HIGH : LOW);
+        openknx.gpio.digitalWrite(EXT_DOOR_MODE_OPN_PIN, doorMode == DoorMode::ALWAYS_OPEN ? HIGH : LOW);
+        openknx.gpio.digitalWrite(EXT_DOOR_MODE_CLD_PIN, doorMode == DoorMode::ALWAYS_CLOSED ? HIGH : LOW);
+        lastExtDoorMode = doorMode;
+    }
+
+    if (lastExtLockRqt != lockRequested)
+    {
+        openknx.gpio.digitalWrite(EXT_LOCK_RQT_PIN, lockRequested ? HIGH : LOW);
+        lastExtLockRqt = lockRequested;
+    }
+
+    if (lastExtLockAct != lockActive)
+    {
+        openknx.gpio.digitalWrite(EXT_LOCK_ACT_PIN, lockActive ? HIGH : LOW);
+        lastExtLockAct = lockActive;
+    }
+
+    if (delayCheckMillis(extProgSwitchLastTrigger, EXT2_KNX_PRG_SWITCH_DEBOUNCE) &&
+        openknx.gpio.digitalRead(EXT_KNX_PRG_SWITCH_PIN) == EXT_KNX_PRG_SWITCH_ACTIVE)
+    {
+        knx.toggleProgMode();
+        extProgSwitchLastTrigger = millis();
+    }
+
+    bool progMode = knx.progMode();
+    if (lastExtKnxPrg != progMode)
+    {
+        openknx.gpio.digitalWrite(EXT_KNX_PRG_PIN, progMode ? HIGH : LOW);
+        lastExtKnxPrg = progMode;
+    }
+}
+
+void DoorControllerModule::showHelp()
+{
+    logInfo("dc send it1", "Send INIT1 command to door.");
+    logInfo("dc send it2", "Send INIT2 command to door.");
+    logInfo("dc send it3", "Send INIT3 command to door.");
+    logInfo("dc send opg", "Send OPENING command to door.");
+    logInfo("dc send opn", "Send OPEN command to door.");
+    logInfo("dc send clg", "Send CLOSING command to door.");
+    logInfo("dc send cls", "Send CLOSED command to door.");
+    logInfo("dc debug [0/1]", "Enable or disable extensive debug output.");
+}
+
+bool DoorControllerModule::processCommand(const std::string cmd, bool diagnoseKo)
+{
+    if (cmd.substr(0, 2) != "dc")
+        return false;
+
+    if (cmd.length() == 11 && cmd.substr(0, 8) == "dc send ")
+    {
+        if (cmd.substr(8, 3) == "it1")
+            memcpy(doorDataSending, PAYLOAD_INIT1, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "it2")
+            memcpy(doorDataSending, PAYLOAD_INIT2, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "it3")
+            memcpy(doorDataSending, PAYLOAD_INIT3, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "opg")
+            memcpy(doorDataSending, PAYLOAD_OPENING, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "opn")
+            memcpy(doorDataSending, PAYLOAD_OPEN, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "clg")
+            memcpy(doorDataSending, PAYLOAD_CLOSING, sizeof(doorDataSending));
+        else if (cmd.substr(8, 3) == "cls")
+            memcpy(doorDataSending, PAYLOAD_CLOSED, sizeof(doorDataSending));
+        else
+            return false;
+
+        if (lastDoorSent == 0)
+            lastDoorSent = 1; // send immediately in next loop
+
+        return true;
+    }
+
+    if (cmd.length() == 10 && cmd.substr(0, 9) == "dc debug ")
+    {
+        if (cmd.substr(9, 1) == "0")
+            doorDebugOutput = false;
+        else if (cmd.substr(9, 1) == "1")
+            doorDebugOutput = true;
+
+        return true;
+    }
+
+    logInfoP("dc (DoorController) command with bad args");
+    if (diagnoseKo)
+        openknx.console.writeDiagenoseKo("dc: bad args");
+    
+    return true;
 }
 
 DoorControllerModule openknxDoorControllerModule;

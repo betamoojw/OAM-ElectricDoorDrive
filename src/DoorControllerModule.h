@@ -1,59 +1,18 @@
+#include <cstdint>
 #include "OpenKNX.h"
 #include "hardware.h"
 #include "enum-helper.h"
-#include "TCA9555.h"
 #include "DoorSerial.h"
 
-enum class EXT1_A : byte
-{
-    NONE = 0,
-    SWITCH_OUT = 1,
-    SWITCH_INS = 2,
-    DOOR_OPN = 4,
-    DOOR_CLD = 8,
-    DOOR_MODE_AUT = 16,
-    DOOR_MODE_MAN = 32,
-    DOOR_MODE_OPN = 64,
-    DOOR_MODE_CLD = 128
-};
+#define DOOR_SEND_INTERVAL 60
 
-enum class EXT1_B : byte
-{
-    NONE = 0,
-    SENSOR_INSIDE_AIR = 1,
-    SENSOR_INSIDE_RAD = 2,
-    MAIN_LCK = 4,
-    MAIN_TST = 8,
-    MAIN_NSK = 16,
-    MAIN_HSK = 32,
-    MAIN_MLD = 64,
-    MAIN_PWR = 128
-};
-
-enum class EXT2_A : byte
-{
-    NONE = 0,
-    SENSOR_NSK2_TST = 1,
-    SENSOR_NSK2_AIR = 2,
-    SENSOR_NSK1_TST = 4,
-    SENSOR_NSK1_AIR = 8,
-    SENSOR_OUTSIDE_TST = 16,
-    SENSOR_OUTSIDE_AIR = 32,
-    SENSOR_OUTSIDE_RAD = 64,
-    SENSOR_INSIDE_TST = 128,
-
-};
-
-enum class EXT2_B : byte
-{
-    NONE = 0,
-    PROG_SWITCH = 4,
-    KNX_PRG = 8,
-    KNX_INF = 16,
-    POWER_RUN = 32,
-    LOCK_ACT = 64,
-    LOCK_RQT = 128
-};
+constexpr uint8_t PAYLOAD_INIT1[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x06};
+constexpr uint8_t PAYLOAD_INIT2[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x05};
+constexpr uint8_t PAYLOAD_INIT3[]   = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x04};
+constexpr uint8_t PAYLOAD_OPEN[]    = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x04};
+constexpr uint8_t PAYLOAD_CLOSING[] = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x01};
+constexpr uint8_t PAYLOAD_CLOSED[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x03};
+constexpr uint8_t PAYLOAD_OPENING[] = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x00};
 
 class DoorControllerModule : public OpenKNX::Module
 {
@@ -68,6 +27,9 @@ class DoorControllerModule : public OpenKNX::Module
     uint16_t flashSize() override;
     void readFlash(const uint8_t *data, const uint16_t size) override;
     void writeFlash() override;
+
+    void showHelp() override;
+    bool processCommand(const std::string cmd, bool diagnoseKo) override;
 
   private:
     enum DoorState
@@ -118,23 +80,45 @@ class DoorControllerModule : public OpenKNX::Module
     unsigned long mainLckStart = 0;
     unsigned long lastLockRequestMld = 0;
 
+    uint32_t lastDoorSent = 0;
+    uint8_t doorDataSending[8] = {};
+    uint8_t lastDataDoorSent[8] = {};
+    uint8_t lastDataDoorReceived[8] = {};
+    bool doorDebugOutput = false;
+
     DoorSerial doorSerial = DoorSerial(MAIN_DOOR_RX_PIN, MAIN_DOOR_TX_PIN);
-
-    TCA9555 extTca1 = TCA9555(EXT1_TCA9555_ADR, &EXT_I2C_BUS);
-    TCA9555 extTca2 = TCA9555(EXT2_TCA9555_ADR, &EXT_I2C_BUS);
-
-    EXT1_A ext1A = EXT1_A::NONE;
-    EXT1_B ext1B = EXT1_B::NONE;
-    EXT2_A ext2A = EXT2_A::NONE;
-    EXT2_B ext2B = EXT2_B::NONE;
 
     unsigned long extProgSwitchLastTrigger = 0;
 
-    // initialize with max. value to enforce first update send
-    EXT1_A ext1ALastSent = (EXT1_A)255u;
-    EXT1_B ext1BLastSent = (EXT1_B)255u;
-    EXT2_A ext2ALastSent = (EXT2_A)255u;
-    EXT2_B ext2BLastSent = (EXT2_B)255u;
+    bool lastExtSwitchOut = false;
+    bool lastExtSwitchIns = false;
+    bool lastExtDoorOpn = false;
+    bool lastExtDoorCld = false;
+    DoorMode lastExtDoorMode = DoorMode::AUTOMATIC;
+
+    bool lastExtSensorInsideAir = false;
+    bool lastExtSensorInsideRad = false;
+    bool lastExtMainLck = false;
+    bool lastExtMainTst = false;
+    bool lastExtMainNsk = false;
+    bool lastExtMainHsk = false;
+    bool lastExtMainMld = false;
+    bool lastExtMainPwr = false;
+
+    bool lastExtSensorNsk2Tst = false;
+    bool lastExtSensorNsk2Air = false;
+    bool lastExtSensorNsk1Tst = false;
+    bool lastExtSensorNsk1Air = false;
+    bool lastExtSensorOutsideAir = false;
+    bool lastExtSensorOutsideRad = false;
+    bool lastExtSensorTst = false;
+
+    bool lastExtKnxPrgSwitch = false;
+    bool lastExtKnxPrg = false;
+    bool lastExtKnxInf = false;
+    bool lastExtPowerRun = false;
+    bool lastExtLockAct = false;
+    bool lastExtLockRqt = false;
 
     bool mainTstActive = false;
     bool sensorTstActive = false;

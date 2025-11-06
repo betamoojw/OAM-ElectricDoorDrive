@@ -1,244 +1,299 @@
 #include "DoorSerial.h"
 
-// Constructor
-DoorSerial::DoorSerial(uint8_t tx_pin, uint8_t rx_pin, unsigned long baud) 
-    : txPin(tx_pin), rxPin(rx_pin), baudRate(baud), lastPeriodicSend(0), 
-      periodicSendEnabled(false), periodicMessage(""), serialPort(nullptr) {
-}
+#include <algorithm>
+#include <utility>
 
-// Destructor
+DoorSerial::DoorSerial(uint8_t rx_pin, uint8_t tx_pin, unsigned long baud)
+    : serialPort(nullptr),
+      rxPin(rx_pin),
+      txPin(tx_pin),
+      baudRate(baud),
+      rxState(RxState::Idle),
+      computedChecksum(0) {}
+
 DoorSerial::~DoorSerial() {
     end();
 }
 
-// Initialize UART communication
 bool DoorSerial::begin() {
-    serialPort = new MAIN_DOOR_SERIAL(rxPin, txPin);
     if (serialPort != nullptr) {
-        end(); // Clean up existing connection
+        end();
     }
-    
+
+    serialPort = new MAIN_DOOR_SERIAL(rxPin, txPin);
     if (serialPort == nullptr) {
         return false;
     }
-    
-    // Configure UART: 115200 baud, 8 data bits, even parity, 1 stop bit
-    serialPort->begin(baudRate, SERIAL_8E1);
-    
-    // Wait a moment for initialization
+
+    serialPort->begin(baudRate, MAIN_DOOR_SERIAL_CONFIG);
     delay(10);
-    
+
+    resetState();
+    clearReceiveBuffer();
+
     if (Serial) {
-        Serial.println("DoorSerial: UART initialized successfully!");
-        Serial.printf("DoorSerial: TX Pin: %d, RX Pin: %d, Baud: %lu\n", 
-                        txPin, rxPin, baudRate);
+        Serial.println("DoorSerial: UART initialized successfully");
+        Serial.printf("DoorSerial: RX Pin: %d, TX Pin: %d, Baud: %lu\n", rxPin, txPin, baudRate);
     }
-    
+
     return true;
 }
 
-// End UART communication
 void DoorSerial::end() {
     if (serialPort != nullptr) {
         serialPort->end();
         delete serialPort;
         serialPort = nullptr;
     }
-    periodicSendEnabled = false;
+
+    messageQueue.clear();
+    resetState();
 }
 
-// Send string message
-void DoorSerial::sendMessage(const String& message) {
+void DoorSerial::poll() {
     if (serialPort == nullptr) {
-        if (Serial) Serial.println("DoorSerial: Error - Not initialized!");
         return;
     }
-    
-    if (Serial) {
-        Serial.println("DoorSerial: Sending - " + message);
+
+    while (serialPort->available()) {
+        const uint8_t byte = serialPort->read();
+        handleIncomingByte(byte);
     }
-    
-    serialPort->println(message);
 }
 
-// Read string message
-String DoorSerial::readMessage() {
-    if (serialPort == nullptr || !serialPort->available()) {
-        return "";
-    }
-    
-    String receivedData = serialPort->readStringUntil('\n');
-    receivedData.trim(); // Remove trailing whitespace
-    
-    if (Serial && receivedData.length() > 0) {
-        Serial.println("DoorSerial: Received - " + receivedData);
-    }
-    
-    return receivedData;
+bool DoorSerial::hasMessage() const {
+    return !messageQueue.empty();
 }
 
-// Check if data is available
-bool DoorSerial::hasData() {
-    return (serialPort != nullptr && serialPort->available() > 0);
-}
-
-// Send binary data
-void DoorSerial::sendBinaryData(const uint8_t* data, size_t length) {
-    if (serialPort == nullptr || data == nullptr) {
-        if (Serial) Serial.println("DoorSerial: Error - Invalid parameters for binary send!");
-        return;
-    }
-    
-    if (Serial) {
-        Serial.printf("DoorSerial: Sending binary data (%zu bytes)\n", length);
-    }
-    
-    serialPort->write(data, length);
-}
-
-// Read binary data
-size_t DoorSerial::readBinaryData(uint8_t* buffer, size_t maxLength) {
-    if (serialPort == nullptr || buffer == nullptr) {
+size_t DoorSerial::readMessage(uint8_t* buffer, size_t maxLength) {
+    if (buffer == nullptr || maxLength == 0) {
         return 0;
     }
-    
-    size_t bytesRead = 0;
-    
-    while (serialPort->available() && bytesRead < maxLength) {
-        buffer[bytesRead] = serialPort->read();
-        bytesRead++;
+
+    poll();
+
+    if (messageQueue.empty()) {
+        return 0;
     }
-    
-    if (Serial && bytesRead > 0) {
-        Serial.printf("DoorSerial: Read %zu binary bytes\n", bytesRead);
+
+    const std::vector<uint8_t>& next = messageQueue.front();
+    if (next.size() > maxLength) {
+        if (Serial) {
+            Serial.printf("DoorSerial: Message too large for buffer (%zu > %zu)\n", next.size(), maxLength);
+        }
+        return 0;
     }
-    
-    return bytesRead;
+
+    std::copy(next.begin(), next.end(), buffer);
+    const size_t length = next.size();
+    messageQueue.pop_front();
+
+    return length;
 }
 
-// Check if UART is connected (simple test)
-bool DoorSerial::isConnected() {
-    if (serialPort == nullptr) {
+bool DoorSerial::sendPayload(const uint8_t* payload, size_t length) {
+    if (serialPort == nullptr || payload == nullptr) {
+        if (Serial) {
+            Serial.println("DoorSerial: Cannot send payload (serial not initialized or payload null)");
+        }
         return false;
     }
-    
-    // Simple connectivity test - check if we can write
-    size_t initialAvailable = serialPort->availableForWrite();
-    serialPort->write((uint8_t)0x00); // Send null byte
-    delay(1);
-    
-    return (serialPort->availableForWrite() != initialAvailable);
+
+    std::vector<uint8_t> frame;
+    frame.reserve(length * 2 + 5);
+
+    frame.push_back(DLE);
+    frame.push_back(STX);
+
+    uint8_t checksum = 0x00;
+    for (size_t i = 0; i < length; ++i) {
+        const uint8_t byte = payload[i];
+        if (byte == DLE) {
+            frame.push_back(DLE);
+            frame.push_back(DLE);
+            checksum ^= DLE;
+            checksum ^= DLE;
+        } else {
+            frame.push_back(byte);
+            checksum ^= byte;
+        }
+    }
+
+    frame.push_back(DLE);
+    frame.push_back(ETX);
+    frame.push_back(checksum);
+
+    const size_t written = serialPort->write(frame.data(), frame.size());
+    serialPort->flush();
+
+    // if (Serial) {
+    //     Serial.printf("DoorSerial: Sent framed payload (%zu bytes payload, %zu bytes frame)\n", length, frame.size());
+    // }
+
+    return written == frame.size();
 }
 
-// Flush UART buffers
+bool DoorSerial::sendPayload(const std::vector<uint8_t>& payload) {
+    return sendPayload(payload.data(), payload.size());
+}
+
+void DoorSerial::setMessageCallback(std::function<void(const std::vector<uint8_t>&)> callback) {
+    messageCallback = std::move(callback);
+}
+
+bool DoorSerial::isConnected() const {
+    return serialPort != nullptr;
+}
+
 void DoorSerial::flush() {
     if (serialPort != nullptr) {
-        serialPort->flush(); // Wait for transmission to complete
+        serialPort->flush();
     }
 }
 
-// Clear receive buffer
 void DoorSerial::clearReceiveBuffer() {
-    if (serialPort == nullptr) return;
-    
+    if (serialPort == nullptr) {
+        return;
+    }
+
     while (serialPort->available()) {
         serialPort->read();
     }
-    
-    if (Serial) {
-        Serial.println("DoorSerial: Receive buffer cleared");
-    }
+
+    resetState();
 }
 
-// Get available space in write buffer
-size_t DoorSerial::availableForWrite() {
+size_t DoorSerial::availableForWrite() const {
     return (serialPort != nullptr) ? serialPort->availableForWrite() : 0;
 }
 
-// Enable periodic message sending
-void DoorSerial::enablePeriodicSend(const String& message, unsigned long intervalMs) {
-    periodicMessage = message;
-    periodicSendEnabled = true;
-    lastPeriodicSend = millis();
-    
-    if (Serial) {
-        Serial.printf("DoorSerial: Periodic send enabled - \"%s\" every %lu ms\n", 
-                     message.c_str(), intervalMs);
-    }
-}
-
-// Disable periodic message sending
-void DoorSerial::disablePeriodicSend() {
-    periodicSendEnabled = false;
-    
-    if (Serial) {
-        Serial.println("DoorSerial: Periodic send disabled");
-    }
-}
-
-// Update periodic sending (call in main loop)
-void DoorSerial::updatePeriodicSend() {
-    if (!periodicSendEnabled || serialPort == nullptr) {
-        return;
-    }
-    
-    static unsigned long periodicInterval = 5000; // Default 5 seconds
-    
-    if (millis() - lastPeriodicSend >= periodicInterval) {
-        sendMessage(periodicMessage);
-        lastPeriodicSend = millis();
-    }
-}
-
-// Set baud rate (requires restart)
 void DoorSerial::setBaudRate(unsigned long baud) {
     baudRate = baud;
-    
+
     if (Serial) {
-        Serial.printf("DoorSerial: Baud rate set to %lu (restart required)\n", baud);
+        Serial.printf("DoorSerial: Baud rate set to %lu\n", baudRate);
     }
-    
-    // If already initialized, restart with new baud rate
+
     if (serialPort != nullptr) {
         begin();
     }
 }
 
-// Set pins (requires restart)
-void DoorSerial::setPins(uint8_t tx_pin, uint8_t rx_pin) {
-    txPin = tx_pin;
+void DoorSerial::setPins(uint8_t rx_pin, uint8_t tx_pin) {
     rxPin = rx_pin;
-    
+    txPin = tx_pin;
+
     if (Serial) {
-        Serial.printf("DoorSerial: Pins set to TX:%d, RX:%d (restart required)\n", 
-                     tx_pin, rx_pin);
+        Serial.printf("DoorSerial: Pins set to RX:%d, TX:%d\n", rxPin, txPin);
     }
-    
-    // If already initialized, restart with new pins
+
     if (serialPort != nullptr) {
         begin();
     }
 }
 
-// Print status information
 void DoorSerial::printStatus() {
-    if (!Serial) return;
-    
+    if (!Serial) {
+        return;
+    }
+
     Serial.println("=== DoorSerial Status ===");
     Serial.printf("Initialized: %s\n", isInitialized() ? "Yes" : "No");
-    Serial.printf("TX Pin: %d\n", txPin);
     Serial.printf("RX Pin: %d\n", rxPin);
+    Serial.printf("TX Pin: %d\n", txPin);
     Serial.printf("Baud Rate: %lu\n", baudRate);
-    
+    Serial.printf("Queued Messages: %zu\n", messageQueue.size());
+
     if (serialPort != nullptr) {
-        Serial.printf("Data Available: %d bytes\n", serialPort->available());
-        Serial.printf("Write Buffer: %zu bytes available\n", serialPort->availableForWrite());
-        Serial.printf("Connected: %s\n", isConnected() ? "Yes" : "No");
+        Serial.printf("Data Available: %d\n", serialPort->available());
+        Serial.printf("Write Buffer Available: %zu\n", serialPort->availableForWrite());
     }
-    
-    Serial.printf("Periodic Send: %s\n", periodicSendEnabled ? "Enabled" : "Disabled");
-    if (periodicSendEnabled) {
-        Serial.printf("Periodic Message: \"%s\"\n", periodicMessage.c_str());
-    }
+
     Serial.println("========================");
+}
+
+void DoorSerial::resetState() {
+    rxState = RxState::Idle;
+    computedChecksum = 0x00;
+    rxBuffer.clear();
+}
+
+void DoorSerial::handleIncomingByte(uint8_t byte) {
+    switch (rxState) {
+        case RxState::Idle:
+            if (byte == DLE) {
+                rxState = RxState::AwaitStx;
+            }
+            break;
+
+        case RxState::AwaitStx:
+            if (byte == STX) {
+                rxBuffer.clear();
+                computedChecksum = 0x00;
+                rxState = RxState::InFrame;
+            } else if (byte != DLE) {
+                rxState = RxState::Idle;
+            }
+            break;
+
+        case RxState::InFrame:
+            if (byte == DLE) {
+                rxState = RxState::AfterDle;
+            } else {
+                if (rxBuffer.size() >= MAX_MESSAGE_LENGTH) {
+                    if (Serial) {
+                        Serial.println("DoorSerial: Discarding message (payload too long)");
+                    }
+                    resetState();
+                    break;
+                }
+                rxBuffer.push_back(byte);
+                computedChecksum ^= byte;
+            }
+            break;
+
+        case RxState::AfterDle:
+            if (byte == DLE) {
+                if (rxBuffer.size() >= MAX_MESSAGE_LENGTH) {
+                    if (Serial) {
+                        Serial.println("DoorSerial: Discarding message (payload too long)");
+                    }
+                    resetState();
+                    break;
+                }
+                computedChecksum ^= DLE;
+                computedChecksum ^= DLE;
+                rxBuffer.push_back(DLE);
+                rxState = RxState::InFrame;
+            } else if (byte == ETX) {
+                rxState = RxState::AwaitChecksum;
+            } else {
+                if (Serial) {
+                    Serial.printf("DoorSerial: Unexpected escape sequence 0x%02X\n", byte);
+                }
+                resetState();
+            }
+            break;
+
+        case RxState::AwaitChecksum:
+            if (byte == computedChecksum) {
+                enqueueMessage(rxBuffer);
+            } else if (Serial) {
+                Serial.printf("DoorSerial: Checksum mismatch (expected 0x%02X, received 0x%02X)\n", computedChecksum, byte);
+            }
+            resetState();
+            break;
+    }
+}
+
+void DoorSerial::enqueueMessage(const std::vector<uint8_t>& message) {
+    if (messageQueue.size() >= MAX_QUEUE_DEPTH) {
+        messageQueue.pop_front();
+    }
+
+    messageQueue.push_back(message);
+
+    if (messageCallback) {
+        messageCallback(messageQueue.back());
+    }
 }
