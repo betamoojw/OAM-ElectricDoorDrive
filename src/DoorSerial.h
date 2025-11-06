@@ -49,7 +49,7 @@ public:
     static constexpr size_t MaxMessageLength = MAX_MESSAGE_LENGTH;
 
     // Constructor
-    DoorSerial(uint8_t rx_pin = MAIN_DOOR_RX_PIN, uint8_t tx_pin = MAIN_DOOR_TX_PIN, unsigned long baud = MAIN_DOOR_SERIAL_BAUD);
+    DoorSerial();
     
     // Destructor
     ~DoorSerial();
@@ -81,15 +81,6 @@ public:
     inline void enablePeriodicSend(const String&, unsigned long = 5000) {}
     inline void disablePeriodicSend() {}
     inline void updatePeriodicSend() {}
-    
-    // Configuration methods
-    void setBaudRate(unsigned long baud);
-    void setPins(uint8_t rx_pin, uint8_t tx_pin);
-    
-    // Status methods
-    uint8_t getTxPin() const { return txPin; }
-    uint8_t getRxPin() const { return rxPin; }
-    unsigned long getBaudRate() const { return baudRate; }
     
     void printStatus();
 };

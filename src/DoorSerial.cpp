@@ -3,11 +3,8 @@
 #include <algorithm>
 #include <utility>
 
-DoorSerial::DoorSerial(uint8_t rx_pin, uint8_t tx_pin, unsigned long baud)
-    : rxPin(rx_pin),
-      txPin(tx_pin),
-      baudRate(baud),
-      rxState(RxState::Idle),
+DoorSerial::DoorSerial()
+    : rxState(RxState::Idle),
       computedChecksum(0) {}
 
 DoorSerial::~DoorSerial() {
@@ -15,9 +12,9 @@ DoorSerial::~DoorSerial() {
 }
 
 bool DoorSerial::begin() {
-    MAIN_DOOR_SERIAL.setRX(rxPin);
-    MAIN_DOOR_SERIAL.setTX(txPin);
-    MAIN_DOOR_SERIAL.begin(baudRate, MAIN_DOOR_SERIAL_CONFIG);
+    MAIN_DOOR_SERIAL.setRX(MAIN_DOOR_RX_PIN);
+    MAIN_DOOR_SERIAL.setTX(MAIN_DOOR_TX_PIN);
+    MAIN_DOOR_SERIAL.begin(MAIN_DOOR_SERIAL_BAUD, MAIN_DOOR_SERIAL_CONFIG);
     delay(10);
 
     resetState();
@@ -134,27 +131,6 @@ void DoorSerial::clearReceiveBuffer() {
     }
 
     resetState();
-}
-
-void DoorSerial::setBaudRate(unsigned long baud) {
-    baudRate = baud;
-
-    if (Serial) {
-        Serial.printf("DoorSerial: Baud rate set to %lu\n", baudRate);
-    }
-
-    begin();
-}
-
-void DoorSerial::setPins(uint8_t rx_pin, uint8_t tx_pin) {
-    rxPin = rx_pin;
-    txPin = tx_pin;
-
-    if (Serial) {
-        Serial.printf("DoorSerial: Pins set to RX:%d, TX:%d\n", rxPin, txPin);
-    }
-
-    begin();
 }
 
 void DoorSerial::printStatus() {

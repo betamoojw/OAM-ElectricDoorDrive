@@ -86,7 +86,7 @@ class DoorControllerModule : public OpenKNX::Module
     uint8_t lastDataDoorReceived[8] = {};
     bool doorDebugOutput = false;
 
-    DoorSerial doorSerial = DoorSerial(MAIN_DOOR_RX_PIN, MAIN_DOOR_TX_PIN);
+    DoorSerial doorSerial = DoorSerial();
 
     unsigned long extProgSwitchLastTrigger = 0;
 
