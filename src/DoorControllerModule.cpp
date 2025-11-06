@@ -31,10 +31,10 @@ void DoorControllerModule::setup()
 
     doorSerial.setMessageCallback([this](const std::vector<uint8_t>& payload) {
         // Only output the received command if it differs from the last one we saw.
-        if (doorDebugOutput ||
-            payload.size() == sizeof(lastDataDoorReceived))
+        if (payload.size() == sizeof(lastDataDoorReceived))
         {
-            if (memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
+            if (doorDebugOutput ||
+                memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
             {
                 memcpy(lastDataDoorReceived, payload.data(), sizeof(lastDataDoorReceived));
                 logDebugP("Door RECEIVED command changed:");
