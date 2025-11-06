@@ -745,6 +745,7 @@ void DoorControllerModule::showHelp()
     logInfo("dc send opn", "Send OPEN command to door.");
     logInfo("dc send clg", "Send CLOSING command to door.");
     logInfo("dc send cls", "Send CLOSED command to door.");
+    logInfo("dc status", "Print door serial status.");
     logInfo("dc debug [0/1]", "Enable or disable extensive debug output.");
 }
 
@@ -775,6 +776,12 @@ bool DoorControllerModule::processCommand(const std::string cmd, bool diagnoseKo
         if (lastDoorSent == 0)
             lastDoorSent = 1; // send immediately in next loop
 
+        return true;
+    }
+
+    if (cmd.length() == 10 && cmd.substr(0, 9) == "dc status")
+    {
+        doorSerial.printStatus();
         return true;
     }
 
