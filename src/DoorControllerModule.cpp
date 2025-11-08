@@ -244,23 +244,23 @@ void DoorControllerModule::loop()
 void DoorControllerModule::doorMessageCallback(const std::vector<uint8_t>& payload)
 {
     // Only output the received command if it differs from the last one we saw.
-    if (payload.size() == sizeof(lastDataDoorReceived))
+    if (payload.size() == DOOR_PAYLOAD_SIZE)
     {
         if (doorDebugOutput ||
-            memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
+            memcmp(payload.data(), lastDataDoorReceived, DOOR_PAYLOAD_SIZE) != 0)
         {
-            memcpy(lastDataDoorReceived, payload.data(), sizeof(lastDataDoorReceived));
+            memcpy(lastDataDoorReceived, payload.data(), DOOR_PAYLOAD_SIZE);
             logDebugP("Door RECEIVED command changed:");
             logIndentUp();
-            logHexDebugP(lastDataDoorReceived, sizeof(lastDataDoorReceived));
+            logHexDebugP(lastDataDoorReceived, DOOR_PAYLOAD_SIZE);
             logIndentDown();
         }
     }
     else
     {
         // Different length -> treat as changed: store what we can and print payload
-        size_t copyLen = std::min(payload.size(), sizeof(lastDataDoorReceived));
-        memset(lastDataDoorReceived, 0, sizeof(lastDataDoorReceived));
+        size_t copyLen = std::min(payload.size(), DOOR_PAYLOAD_SIZE);
+        memset(lastDataDoorReceived, 0, DOOR_PAYLOAD_SIZE);
         if (copyLen > 0)
             memcpy(lastDataDoorReceived, payload.data(), copyLen);
 
@@ -664,21 +664,6 @@ void DoorControllerModule::lock(bool active)
     logDebugP("lockActive: %i", lockActive);
 }
 
-void DoorControllerModule::setDoorCommand(const DoorCommandDefinition &definition)
-{
-    activeDoorPrefixes = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixPayloads : nullptr;
-    activeDoorPrefixCount = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixCount : 0;
-    activeDoorPrefixIndex = 0;
-
-    if (definition.finalPayload != nullptr)
-        memcpy(doorDataSending, definition.finalPayload, DOOR_PAYLOAD_SIZE);
-    else
-        memset(doorDataSending, 0, DOOR_PAYLOAD_SIZE);
-
-    memset(lastDataDoorSent, 0, sizeof(lastDataDoorSent));
-    lastDoorSent = 1; // trigger immediate send on next loop iteration
-}
-
 void DoorControllerModule::updateExtensionOutputs()
 {
     if (lastExtMainPwr != mainPwrActive)
@@ -873,6 +858,21 @@ bool DoorControllerModule::processCommand(const std::string cmd, bool diagnoseKo
         openknx.console.writeDiagenoseKo("dc: bad args");
     
     return true;
+}
+
+void DoorControllerModule::setDoorCommand(const DoorCommandDefinition &definition)
+{
+    activeDoorPrefixes = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixPayloads : nullptr;
+    activeDoorPrefixCount = (definition.prefixCount > 0 && definition.prefixPayloads != nullptr) ? definition.prefixCount : 0;
+    activeDoorPrefixIndex = 0;
+
+    if (definition.finalPayload != nullptr)
+        memcpy(doorDataSending, definition.finalPayload, DOOR_PAYLOAD_SIZE);
+    else
+        memset(doorDataSending, 0, DOOR_PAYLOAD_SIZE);
+
+    memset(lastDataDoorSent, 0, sizeof(lastDataDoorSent));
+    lastDoorSent = 1; // trigger immediate send on next loop iteration
 }
 
 DoorControllerModule openknxDoorControllerModule;

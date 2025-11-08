@@ -94,14 +94,14 @@ class DoorControllerModule : public OpenKNX::Module
     unsigned long lastLockRequestMld = 0;
 
     uint32_t lastDoorSent = 0;
-  uint8_t doorDataSending[DOOR_PAYLOAD_SIZE] = {};
-  uint8_t lastDataDoorSent[DOOR_PAYLOAD_SIZE] = {};
-  uint8_t lastDataDoorReceived[DOOR_PAYLOAD_SIZE] = {};
+    uint8_t doorDataSending[DOOR_PAYLOAD_SIZE] = {};
+    uint8_t lastDataDoorSent[DOOR_PAYLOAD_SIZE] = {};
+    uint8_t lastDataDoorReceived[DOOR_PAYLOAD_SIZE] = {};
     bool doorDebugOutput = false;
 
-  const uint8_t *const *activeDoorPrefixes = nullptr;
-  size_t activeDoorPrefixCount = 0;
-  size_t activeDoorPrefixIndex = 0;
+    const uint8_t *const *activeDoorPrefixes = nullptr;
+    size_t activeDoorPrefixCount = 0;
+    size_t activeDoorPrefixIndex = 0;
 
     DoorSerial doorSerial = DoorSerial();
 
@@ -165,7 +165,7 @@ class DoorControllerModule : public OpenKNX::Module
     void sendMainMld(bool active);
     void lock(bool active);
 
-  void setDoorCommand(const DoorCommandDefinition &definition);
+    void setDoorCommand(const DoorCommandDefinition &definition);
 
     static void interruptSensorInsideRadChange();
     static void interruptSensorInsideAirChange();
