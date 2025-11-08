@@ -76,35 +76,7 @@ void DoorControllerModule::setup()
     openknx.gpio.pinMode(SENSOR_OUTSIDE_AIR_PIN, INPUT_PULLUP);
 
     doorSerial.setMessageCallback([this](const std::vector<uint8_t>& payload) {
-        // Only output the received command if it differs from the last one we saw.
-        if (payload.size() == sizeof(lastDataDoorReceived))
-        {
-            if (doorDebugOutput ||
-                memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
-            {
-                memcpy(lastDataDoorReceived, payload.data(), sizeof(lastDataDoorReceived));
-                logDebugP("Door RECEIVED command changed:");
-                logIndentUp();
-                logHexDebugP(lastDataDoorReceived, sizeof(lastDataDoorReceived));
-                logIndentDown();
-            }
-        }
-        else
-        {
-            // Different length -> treat as changed: store what we can and print payload
-            size_t copyLen = std::min(payload.size(), sizeof(lastDataDoorReceived));
-            memset(lastDataDoorReceived, 0, sizeof(lastDataDoorReceived));
-            if (copyLen > 0)
-                memcpy(lastDataDoorReceived, payload.data(), copyLen);
-
-            logDebugP("Door RECEIVED command (len %u) differs from stored one:", static_cast<unsigned>(payload.size()));
-            if (!payload.empty())
-            {
-                logIndentUp();
-                logHexDebugP(payload.data(), payload.size());
-                logIndentDown();
-            }
-        }
+        this->doorMessageCallback(payload);
     });
 
     doorSerial.begin();
@@ -267,6 +239,39 @@ void DoorControllerModule::loop()
     updateDoorState();
     processDoorStateMachine();
     updateExtensionOutputs();
+}
+
+void DoorControllerModule::doorMessageCallback(const std::vector<uint8_t>& payload)
+{
+    // Only output the received command if it differs from the last one we saw.
+    if (payload.size() == sizeof(lastDataDoorReceived))
+    {
+        if (doorDebugOutput ||
+            memcmp(payload.data(), lastDataDoorReceived, sizeof(lastDataDoorReceived)) != 0)
+        {
+            memcpy(lastDataDoorReceived, payload.data(), sizeof(lastDataDoorReceived));
+            logDebugP("Door RECEIVED command changed:");
+            logIndentUp();
+            logHexDebugP(lastDataDoorReceived, sizeof(lastDataDoorReceived));
+            logIndentDown();
+        }
+    }
+    else
+    {
+        // Different length -> treat as changed: store what we can and print payload
+        size_t copyLen = std::min(payload.size(), sizeof(lastDataDoorReceived));
+        memset(lastDataDoorReceived, 0, sizeof(lastDataDoorReceived));
+        if (copyLen > 0)
+            memcpy(lastDataDoorReceived, payload.data(), copyLen);
+
+        logDebugP("Door RECEIVED command (len %u) differs from stored one:", static_cast<unsigned>(payload.size()));
+        if (!payload.empty())
+        {
+            logIndentUp();
+            logHexDebugP(payload.data(), payload.size());
+            logIndentDown();
+        }
+    }
 }
 
 void DoorControllerModule::processDoorSerial()

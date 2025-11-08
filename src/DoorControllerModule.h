@@ -149,6 +149,7 @@ class DoorControllerModule : public OpenKNX::Module
     inline volatile static bool sensorOutsideAirActiveNew = false;
 
     void enableExtInterface();
+    void doorMessageCallback(const std::vector<uint8_t>& payload);
     void processDoorSerial();
     void processSensorInsideRadChange();
     void processSensorInsideAirChange();
