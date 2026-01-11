@@ -6,6 +6,7 @@
 #include "DoorSerial.h"
 
 #define DOOR_SEND_INTERVAL 60
+#define DOOR_SEND_TIMEOUT 150
 
 constexpr uint8_t PAYLOAD_INIT1[]         = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x06};
 constexpr uint8_t PAYLOAD_INIT2[]         = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x04, 0x05};
@@ -17,6 +18,16 @@ constexpr uint8_t PAYLOAD_CLOSING_PRE2[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00,
 constexpr uint8_t PAYLOAD_CLOSED[]        = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x00, 0x03};
 constexpr uint8_t PAYLOAD_OPENING[]       = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x10, 0x00};
 constexpr uint8_t PAYLOAD_OPENING_PRE1[]  = {0x00, 0x00, 0x00, 0x52, 0x0B, 0x00, 0x12, 0x03};
+
+// last byte is door state
+#define DOOR_STATE_OPEN       0x04
+#define DOOR_STATE_CLOSED     0x03
+#define DOOR_STATE_CLOSING    0x01
+#define DOOR_STATE_OPENING    0x00
+
+// second last byte is trigger reason
+#define DOOR_TRIGGER_RADAR    0x12
+#define DOOR_TRIGGER_INFRARED 0x14
 
 constexpr size_t DOOR_PAYLOAD_SIZE = sizeof(PAYLOAD_INIT1);
 
@@ -94,6 +105,9 @@ class DoorControllerModule : public OpenKNX::Module
     unsigned long lastLockRequestMld = 0;
 
     uint32_t lastDoorSent = 0;
+    bool startSending = false;
+    bool nextMessageReceived = false;
+    bool doorDataSendingHasData = false;
     uint8_t doorDataSending[DOOR_PAYLOAD_SIZE] = {};
     uint8_t lastDataDoorSent[DOOR_PAYLOAD_SIZE] = {};
     uint8_t lastDataDoorReceived[DOOR_PAYLOAD_SIZE] = {};

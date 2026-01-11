@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <cstdio>
 
 DoorSerial::DoorSerial()
     : rxState(RxState::Idle),
@@ -17,6 +18,7 @@ std::string DoorSerial::logPrefix()
 }
 
 void DoorSerial::begin() {
+    MAIN_DOOR_SERIAL.setFIFOSize(1024);
     MAIN_DOOR_SERIAL.setRX(MAIN_DOOR_RX_PIN);
     MAIN_DOOR_SERIAL.setTX(MAIN_DOOR_TX_PIN);
     MAIN_DOOR_SERIAL.begin(MAIN_DOOR_SERIAL_BAUD, MAIN_DOOR_SERIAL_CONFIG);
@@ -35,10 +37,28 @@ void DoorSerial::end() {
 }
 
 void DoorSerial::poll() {
+    // std::vector<uint8_t> received;
     while (MAIN_DOOR_SERIAL.available()) {
         const uint8_t byte = MAIN_DOOR_SERIAL.read();
+        // received.push_back(byte);
         handleIncomingByte(byte);
     }
+
+    // if (!received.empty()) {
+    //     // Format bytes as hex string for debug output
+    //     std::string hexStr;
+    //     hexStr.reserve(received.size() * 3);
+    //     char buf[4];
+    //     for (size_t i = 0; i < received.size(); ++i) {
+    //         std::snprintf(buf, sizeof(buf), "%02X", received[i]);
+    //         hexStr += buf;
+    //         if (i + 1 < received.size()) {
+    //             hexStr += ' ';
+    //         }
+    //     }
+
+    //     logDebugP("DoorSerial: Received raw bytes (%zu): %s", received.size(), hexStr.c_str());
+    // }
 }
 
 bool DoorSerial::hasMessage() const {

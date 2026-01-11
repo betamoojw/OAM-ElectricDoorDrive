@@ -226,7 +226,6 @@ void DoorControllerModule::enableExtInterface()
 void DoorControllerModule::loop()
 {
     processDoorSerial();
-    return;
 
     processSensorInsideRadChange();
     processSensorInsideAirChange();
@@ -254,7 +253,32 @@ void DoorControllerModule::doorMessageCallback(const std::vector<uint8_t>& paylo
             logIndentUp();
             logHexDebugP(lastDataDoorReceived, DOOR_PAYLOAD_SIZE);
             logIndentDown();
+
+            switch (lastDataDoorReceived[DOOR_PAYLOAD_SIZE - 1])
+            {
+                case DOOR_STATE_OPEN:
+                    doorState = DoorState::OPEN;
+                    break;
+
+                case DOOR_STATE_CLOSED:
+                    doorState = DoorState::CLOSED;
+                    break;
+
+                case DOOR_STATE_CLOSING:
+                    doorState = DoorState::CLOSING;
+                    break;
+
+                case DOOR_STATE_OPENING:
+                    doorState = DoorState::OPENING;
+                    break;
+                
+                default:
+                    logInfoP("Unknown door state received: %02X", lastDataDoorReceived[DOOR_PAYLOAD_SIZE - 1]);
+                    break;
+            }
         }
+
+        nextMessageReceived = true;
     }
     else
     {
@@ -278,9 +302,12 @@ void DoorControllerModule::processDoorSerial()
 {
     doorSerial.poll();
 
-    if (lastDoorSent > 0 && delayCheckMillis(lastDoorSent, DOOR_SEND_INTERVAL))
+    bool timeout = lastDoorSent > 0 && delayCheckMillis(lastDoorSent, DOOR_SEND_TIMEOUT);
+    if (doorDataSendingHasData && (startSending || nextMessageReceived || timeout))
     {
-        lastDoorSent = millis();
+        if (timeout)
+            logDebugP("Door SEND timeout occurred");
+        
         const uint8_t *payloadToSend = doorDataSending;
 
         if (activeDoorPrefixes != nullptr && activeDoorPrefixIndex < activeDoorPrefixCount)
@@ -290,6 +317,7 @@ void DoorControllerModule::processDoorSerial()
         }
 
         doorSerial.sendPayload(payloadToSend, DOOR_PAYLOAD_SIZE);
+        lastDoorSent = delayTimerInit();
 
         if (doorDebugOutput ||
             memcmp(payloadToSend, lastDataDoorSent, DOOR_PAYLOAD_SIZE) != 0)
@@ -301,6 +329,9 @@ void DoorControllerModule::processDoorSerial()
             logHexDebugP(lastDataDoorSent, DOOR_PAYLOAD_SIZE);
             logIndentDown();
         }
+
+        startSending = false;
+        nextMessageReceived = false;
     }
 
     // uint8_t payload[DoorSerial::MaxMessageLength];
@@ -644,8 +675,17 @@ void DoorControllerModule::processDoorStateMachine()
 
 void DoorControllerModule::sendMainMld(bool active)
 {
+    // #ToDo
+    if (!active)
+        return;
+
     doorStateChanged = false;
     doorStateLastChanged = millis();
+
+    if (doorState == DoorState::OPEN || doorState == DoorState::OPENING)
+        setDoorCommand(COMMAND_CLOSING);
+    else
+        setDoorCommand(COMMAND_OPENING);
 
     // digitalWrite(MAIN_MLD_PIN, active ? MAIN_MLD_ACTIVE : !MAIN_MLD_ACTIVE);
     // mainMldActive = active;
@@ -870,9 +910,10 @@ void DoorControllerModule::setDoorCommand(const DoorCommandDefinition &definitio
         memcpy(doorDataSending, definition.finalPayload, DOOR_PAYLOAD_SIZE);
     else
         memset(doorDataSending, 0, DOOR_PAYLOAD_SIZE);
+    doorDataSendingHasData = true;
 
     memset(lastDataDoorSent, 0, sizeof(lastDataDoorSent));
-    lastDoorSent = 1; // trigger immediate send on next loop iteration
+    startSending = true;
 }
 
 DoorControllerModule openknxDoorControllerModule;
